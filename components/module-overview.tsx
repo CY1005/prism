@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -131,10 +132,15 @@ export function ModuleOverview({ onFeatureSelect }: ModuleOverviewProps) {
               <TableRow 
                 key={item.id} 
                 className="cursor-pointer hover:bg-muted/30"
-                onClick={() => onFeatureSelect?.(item.id)}
               >
-                <TableCell className="text-primary cursor-pointer font-medium">
-                  {item.name}
+                <TableCell className="font-medium p-0">
+                  <Link 
+                    href={`/feature/${item.id}`}
+                    className="text-primary hover:underline block px-4 py-4"
+                    onClick={() => onFeatureSelect?.(item.id)}
+                  >
+                    {item.name}
+                  </Link>
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline">{item.version}</Badge>

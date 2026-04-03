@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import {
   PanelLeftClose,
   PanelLeft,
@@ -44,6 +44,15 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 
+// Feature data mapping
+const featureDataMap: Record<string, { name: string; version: string }> = {
+  "create-inference": { name: "创建推理服务", version: "v3.9.3" },
+  "auto-scaling": { name: "自动扩缩容", version: "v3.7" },
+  "card-management": { name: "拼卡管理", version: "v3.8" },
+  "replica-management": { name: "副本管理", version: "v2.0" },
+  "gpu-scheduling": { name: "GPU调度策略", version: "v1.6" },
+}
+
 // Version timeline data
 const versionData = [
   {
@@ -67,21 +76,13 @@ const versionData = [
   },
 ]
 
-// Feature IDs that have detail pages
-const featureIds = ["create-inference", "auto-scaling", "card-management", "replica-management", "gpu-scheduling"]
-
 export default function FeatureDetailPage() {
-  const router = useRouter()
+  const params = useParams()
+  const featureId = params.id as string
+  const featureData = featureDataMap[featureId] || { name: "创建推理服务", version: "v3.9.3" }
+  
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [selectedFeature, setSelectedFeature] = useState("create-inference")
-
-  const handleFeatureSelect = (id: string) => {
-    setSelectedFeature(id)
-    // Navigate to feature detail page if it's a leaf node
-    if (featureIds.includes(id)) {
-      router.push(`/feature/${id}`)
-    }
-  }
+  const [selectedFeature, setSelectedFeature] = useState(featureId || "create-inference")
 
   const completedDimensions = 5
   const totalDimensions = 8
@@ -112,7 +113,13 @@ export default function FeatureDetailPage() {
             <FeatureTree
               data={treeData}
               selectedId={selectedFeature}
-              onSelect={handleFeatureSelect}
+              onSelect={(id) => {
+                setSelectedFeature(id)
+                // Navigate to the feature page if it's a leaf node
+                if (featureDataMap[id]) {
+                  window.location.href = `/feature/${id}`
+                }
+              }}
             />
           </div>
         </ScrollArea>
@@ -162,7 +169,7 @@ export default function FeatureDetailPage() {
                   <ChevronRight className="h-4 w-4" />
                 </BreadcrumbSeparator>
                 <BreadcrumbItem>
-                  <BreadcrumbPage>创建推理服务</BreadcrumbPage>
+                  <BreadcrumbPage>{featureData.name}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>

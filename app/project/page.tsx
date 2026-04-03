@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   PanelLeftClose,
   PanelLeft,
@@ -39,7 +40,11 @@ const tabs: { id: TabType; label: string }[] = [
   { id: "competitive", label: "竞品对比" },
 ]
 
+// Feature IDs that have detail pages
+const featureIds = ["create-inference", "auto-scaling", "card-management", "replica-management", "gpu-scheduling"]
+
 export default function ProjectWorkbenchPage() {
+  const router = useRouter()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>("product-line")
   const [selectedFeature, setSelectedFeature] = useState("private-cloud")
@@ -49,8 +54,8 @@ export default function ProjectWorkbenchPage() {
   const getBreadcrumbItems = () => {
     if (contentType === "module-overview") {
       return [
-        { label: "AI云平台竞品分析", href: "#" },
-        { label: "私有云", href: "#" },
+        { label: "AI云平台竞品分析", onClick: () => setContentType("product-line-overview") },
+        { label: "私有云", onClick: () => setContentType("product-line-overview") },
         { label: "推理服务", current: true },
       ]
     }
@@ -68,8 +73,8 @@ export default function ProjectWorkbenchPage() {
   }
 
   const handleFeatureSelect = (featureId: string) => {
-    // Navigate to the detailed feature page (original page.tsx)
-    window.location.href = "/"
+    // Navigate to the detailed feature page
+    setSelectedFeature(featureId)
   }
 
   const showSidebar = activeTab === "product-line"
@@ -124,7 +129,16 @@ export default function ProjectWorkbenchPage() {
                       <BreadcrumbPage>{item.label}</BreadcrumbPage>
                     ) : (
                       <>
-                        <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
+                        {item.onClick ? (
+                          <button 
+                            onClick={item.onClick}
+                            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {item.label}
+                          </button>
+                        ) : (
+                          <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
+                        )}
                         <BreadcrumbSeparator>
                           <ChevronRight className="h-4 w-4" />
                         </BreadcrumbSeparator>
@@ -206,11 +220,14 @@ export default function ProjectWorkbenchPage() {
                     selectedId={selectedFeature}
                     onSelect={(id) => {
                       setSelectedFeature(id)
-                      // Check if it's a module folder or a feature
+                      // Check if it's a module folder, product line, or feature
                       if (["inference-service", "training-service", "ops-service"].includes(id)) {
                         setContentType("module-overview")
                       } else if (["private-cloud", "public-cloud", "smart-computing"].includes(id)) {
                         setContentType("product-line-overview")
+                      } else if (featureIds.includes(id)) {
+                        // Navigate to feature detail page
+                        router.push(`/feature/${id}`)
                       }
                     }}
                   />
