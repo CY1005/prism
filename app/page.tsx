@@ -83,7 +83,7 @@ export default function FeatureDetailPage() {
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-          <Link href="/projects" className="font-semibold text-sidebar-foreground hover:text-primary transition-colors">Prism</Link>
+          <Link href="/project" className="font-semibold text-sidebar-foreground hover:text-primary transition-colors">Prism</Link>
           <Button
             variant="ghost"
             size="icon"
