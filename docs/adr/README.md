@@ -10,3 +10,4 @@
 | [006](006-state-management.md) | TanStack Query + Zustand 职责分离 | Accepted |
 | [007](007-pgvector-deferred.md) | pgvector 延迟到 v0.3 | Accepted |
 | [008](008-project-ownership-evolution.md) | 0.x 项目归个人，1.x 团队化 | Accepted |
+| [009](009-react-flow-state-separation.md) | React Flow 视图状态与业务数据分离 | Accepted |
