@@ -29,6 +29,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { FeatureTree } from "@/components/feature-tree"
+import { Card } from "@/components/ui/card"
 import { DimensionCard } from "@/components/dimension-card"
 import { VersionTimeline } from "@/components/version-timeline"
 import { treeData } from "@/lib/tree-data"
@@ -40,6 +41,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Separator } from "@/components/ui/separator"
+import { testAnalysisData } from "@/lib/test-analysis-data"
 import { cn } from "@/lib/utils"
 
 // Version timeline data
@@ -319,16 +322,96 @@ export default function FeatureDetailPage() {
               </div>
             </DimensionCard>
 
-            {/* Card 6: 测试分析 (collapsed) */}
+            {/* Card 6: 测试分析 */}
             <DimensionCard
               title="测试分析"
               icon={TestTube}
               entryCount={2}
               collapsedSummary="已记录 2 个问题"
-              defaultExpanded={false}
+              defaultExpanded={true}
               onAdd={() => {}}
             >
-              <p className="text-sm text-muted-foreground">测试分析内容...</p>
+              <div>
+                {/* Sub-tabs */}
+                <div className="flex gap-4 border-b mb-4">
+                  <span className="text-primary border-b-2 border-primary pb-2 font-medium text-sm">
+                    问题列表
+                  </span>
+                  <span className="text-muted-foreground text-sm pb-2">测试用例</span>
+                </div>
+
+                {/* Add Issue Button */}
+                <div className="flex justify-end mb-3">
+                  <Button variant="outline" size="sm">+ 记录问题</Button>
+                </div>
+
+                {/* Issues */}
+                <div className="space-y-3">
+                  {testAnalysisData.issues.map((issue) => (
+                    <Card key={issue.id} className="border-border/60 p-4">
+                      <div className="flex items-center gap-2">
+                        <Badge className={issue.type === "Bug" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>
+                          {issue.type}
+                        </Badge>
+                        <span className="font-medium text-sm">{issue.title}</span>
+                        <div className="flex-1" />
+                        <Badge variant="secondary">{issue.priority}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-2">{issue.description}</p>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="outline" className="text-xs">{issue.version}</Badge>
+                        <span className="text-xs text-muted-foreground">发现于 {issue.foundDate}</span>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Separator and Test Cases */}
+                <Separator className="my-4" />
+
+                <h4 className="font-medium text-sm mb-1">测试用例</h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  共 {testAnalysisData.testCases.total} 条（{testAnalysisData.testCases.aiGenerated} 条 AI 生成，{testAnalysisData.testCases.manual} 条手动）
+                </p>
+
+                <div className="rounded-md border overflow-hidden">
+                  <Table className="text-sm">
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="w-8">#</TableHead>
+                        <TableHead>测试用例</TableHead>
+                        <TableHead className="w-16">来源</TableHead>
+                        <TableHead className="w-14">优先级</TableHead>
+                        <TableHead className="w-16">状态</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {testAnalysisData.testCases.items.map((testCase) => (
+                        <TableRow key={testCase.id}>
+                          <TableCell>{testCase.id}</TableCell>
+                          <TableCell>{testCase.name}</TableCell>
+                          <TableCell>
+                            <Badge className={testCase.source === "AI生成" ? "bg-blue-50 text-blue-700 text-xs" : "bg-gray-100 text-gray-700 text-xs"}>
+                              {testCase.source}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{testCase.priority}</TableCell>
+                          <TableCell>
+                            <Badge className={cn(
+                              "text-xs",
+                              testCase.status === "通过" && "bg-green-50 text-green-700",
+                              testCase.status === "失败" && "bg-red-50 text-red-700",
+                              testCase.status === "未执行" && "bg-gray-100 text-gray-600"
+                            )}>
+                              {testCase.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             </DimensionCard>
 
             {/* Card 7: 需求分析 (collapsed, empty) */}
