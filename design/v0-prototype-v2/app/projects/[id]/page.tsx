@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useParams, usePathname } from "next/navigation"
 import { Search, Bell, ChevronRight, LogOut, Settings, Shield } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,9 @@ function getStatusColor(percent: number) {
 }
 
 export default function ProjectOverviewPage() {
+  const params = useParams()
+  const projectId = params.id as string
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card px-6">
@@ -75,6 +79,26 @@ export default function ProjectOverviewPage() {
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
+      </div>
+
+      <div className="flex items-center gap-6 border-b border-border px-6">
+        <Link href={`/projects/${projectId}`} className="border-b-2 border-primary text-primary font-medium pb-3 pt-2 text-sm">
+          全景图
+        </Link>
+        <Link href={`/projects/${projectId}/product-lines/private-cloud`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          产品线
+        </Link>
+        <Link href={`/projects/${projectId}/analysis`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          需求分析
+        </Link>
+        <Link href={`/projects/${projectId}/comparison`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          竞品对比
+        </Link>
+        <div className="flex-1" />
+        <Link href={`/projects/${projectId}/settings`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm flex items-center gap-1">
+          <Settings className="h-3.5 w-3.5" />
+          设置
+        </Link>
       </div>
 
       <div className="grid grid-cols-4 gap-4 px-6 py-4">
