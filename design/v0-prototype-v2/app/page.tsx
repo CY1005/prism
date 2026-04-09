@@ -134,13 +134,13 @@ export default function FeatureDetailPage() {
                   <ChevronRight className="h-4 w-4" />
                 </BreadcrumbSeparator>
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="/projects/1">私有云</BreadcrumbLink>
+                  <BreadcrumbLink href="/projects/1/product-lines/private-cloud">私有云</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator>
                   <ChevronRight className="h-4 w-4" />
                 </BreadcrumbSeparator>
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="/projects/1">推理服务</BreadcrumbLink>
+                  <BreadcrumbLink href="/projects/1/modules/inference-service">推理服务</BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator>
                   <ChevronRight className="h-4 w-4" />
