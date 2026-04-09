@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Breadcrumb,
@@ -29,6 +30,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { FeatureTree } from "@/components/feature-tree"
+import { Card } from "@/components/ui/card"
 import { DimensionCard } from "@/components/dimension-card"
 import { VersionTimeline } from "@/components/version-timeline"
 import { treeData } from "@/lib/tree-data"
@@ -40,7 +42,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { cn } from "@/lib/utils"
+import { Separator } from "@/components/ui/separator"
+import { testAnalysisData } from "@/lib/test-analysis-data"
 
 // Version timeline data
 const versionData = [
@@ -83,7 +86,10 @@ export default function FeatureDetailPage() {
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-          <Link href="/projects" className="font-semibold text-sidebar-foreground hover:text-primary transition-colors">Prism</Link>
+          <div className="flex items-center gap-2">
+            <Link href="/projects" className="font-semibold text-sidebar-foreground hover:text-primary transition-colors">AI云平台竞品分析</Link>
+            <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">产品分析</Badge>
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -212,9 +218,9 @@ export default function FeatureDetailPage() {
               </div>
             </DimensionCard>
 
-            {/* Card 3: 平台侧技术 */}
+            {/* Card 3: 技术实现 */}
             <DimensionCard
-              title="平台侧技术"
+              title="技术实现"
               icon={Server}
               entryCount={2}
               defaultExpanded={true}
@@ -243,6 +249,9 @@ export default function FeatureDetailPage() {
                     <Badge variant="secondary">显存隔离</Badge>
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground mt-4">
+                  参考标准：Volcano (CNCF孵化·华为主导) · KServe (K8s模型serving标准)
+                </p>
               </div>
             </DimensionCard>
 
@@ -319,16 +328,96 @@ export default function FeatureDetailPage() {
               </div>
             </DimensionCard>
 
-            {/* Card 6: 测试分析 (collapsed) */}
+            {/* Card 6: 测试分析 */}
             <DimensionCard
               title="测试分析"
               icon={TestTube}
               entryCount={2}
               collapsedSummary="已记录 2 个问题"
-              defaultExpanded={false}
+              defaultExpanded={true}
               onAdd={() => {}}
             >
-              <p className="text-sm text-muted-foreground">测试分析内容...</p>
+              <div>
+                {/* Sub-tabs */}
+                <div className="flex gap-4 border-b mb-4">
+                  <span className="text-primary border-b-2 border-primary pb-2 font-medium text-sm">
+                    问题列表
+                  </span>
+                  <span className="text-muted-foreground text-sm pb-2">测试用例</span>
+                </div>
+
+                {/* Add Issue Button */}
+                <div className="flex justify-end mb-3">
+                  <Button variant="outline" size="sm">+ 记录问题</Button>
+                </div>
+
+                {/* Issues */}
+                <div className="space-y-3">
+                  {testAnalysisData.issues.map((issue) => (
+                    <Card key={issue.id} className="border-border/60 p-4">
+                      <div className="flex items-center gap-2">
+                        <Badge className={issue.type === "Bug" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}>
+                          {issue.type}
+                        </Badge>
+                        <span className="font-medium text-sm">{issue.title}</span>
+                        <div className="flex-1" />
+                        <Badge variant="secondary">{issue.priority}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-2">{issue.description}</p>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="outline" className="text-xs">{issue.version}</Badge>
+                        <span className="text-xs text-muted-foreground">发现于 {issue.foundDate}</span>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Separator and Test Cases */}
+                <Separator className="my-4" />
+
+                <h4 className="font-medium text-sm mb-1">测试用例</h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  共 {testAnalysisData.testCases.total} 条（{testAnalysisData.testCases.aiGenerated} 条 AI 生成，{testAnalysisData.testCases.manual} 条手动）
+                </p>
+
+                <div className="rounded-md border overflow-hidden">
+                  <Table className="text-sm">
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="w-8">#</TableHead>
+                        <TableHead>测试用例</TableHead>
+                        <TableHead className="w-16">来源</TableHead>
+                        <TableHead className="w-14">优先级</TableHead>
+                        <TableHead className="w-16">状态</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {testAnalysisData.testCases.items.map((testCase) => (
+                        <TableRow key={testCase.id}>
+                          <TableCell>{testCase.id}</TableCell>
+                          <TableCell>{testCase.name}</TableCell>
+                          <TableCell>
+                            <Badge className={testCase.source === "AI生成" ? "bg-blue-50 text-blue-700 text-xs" : "bg-gray-100 text-gray-700 text-xs"}>
+                              {testCase.source}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{testCase.priority}</TableCell>
+                          <TableCell>
+                            <Badge className={cn(
+                              "text-xs",
+                              testCase.status === "通过" && "bg-green-50 text-green-700",
+                              testCase.status === "失败" && "bg-red-50 text-red-700",
+                              testCase.status === "未执行" && "bg-gray-100 text-gray-600"
+                            )}>
+                              {testCase.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             </DimensionCard>
 
             {/* Card 7: 需求分析 (collapsed, empty) */}
@@ -342,7 +431,7 @@ export default function FeatureDetailPage() {
             >
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <ClipboardList className="h-10 w-10 text-muted-foreground/40" />
-                <p className="mt-2 text-sm text-muted-foreground">点击添加需求分析</p>
+                <p className="mt-2 text-sm text-muted-foreground">点击添加，或上传需求文档自动分析</p>
               </div>
             </DimensionCard>
 
@@ -350,8 +439,8 @@ export default function FeatureDetailPage() {
             <DimensionCard
               title="竞品参考"
               icon={Building}
-              entryCount={1}
-              collapsedSummary="已参考 1 个竞品"
+              entryCount={3}
+              collapsedSummary="已对标 3 家竞品"
               defaultExpanded={false}
               onAdd={() => {}}
             >
