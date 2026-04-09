@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronRight, Folder, FileText } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { ChevronRight, Folder, FileText, Plus, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface TreeNode {
@@ -9,67 +9,153 @@ export interface TreeNode {
   name: string;
   type: "folder" | "file";
   depth: number;
+  completionPercent: number;
   children: TreeNode[];
+}
+
+function getStatusColor(percent: number) {
+  if (percent >= 80) return "bg-green-500";
+  if (percent >= 40) return "bg-yellow-500";
+  return "bg-red-500";
 }
 
 interface FeatureTreeProps {
   data: TreeNode[];
   selectedId: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, type: "folder" | "file") => void;
+  onAddChild?: (parentId: string, type: "folder" | "file") => void;
+  onRename?: (nodeId: string, currentName: string) => void;
+  onDelete?: (nodeId: string) => void;
+  onReorder?: (nodeId: string, newIndex: number) => void;
 }
+
+// ─── Context Menu ─────────────────────────────────────
+
+function ContextMenu({
+  x,
+  y,
+  node,
+  onClose,
+  onAddChild,
+  onRename,
+  onDelete,
+}: {
+  x: number;
+  y: number;
+  node: TreeNode;
+  onClose: () => void;
+  onAddChild?: (parentId: string, type: "folder" | "file") => void;
+  onRename?: (nodeId: string, currentName: string) => void;
+  onDelete?: (nodeId: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 min-w-[160px] rounded-md border bg-popover p-1 shadow-md"
+      style={{ left: x, top: y }}
+    >
+      {node.type === "folder" && (
+        <>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+            onClick={() => { onAddChild?.(node.id, "folder"); onClose(); }}
+          >
+            <Folder className="h-4 w-4" /> 添加子文件夹
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+            onClick={() => { onAddChild?.(node.id, "file"); onClose(); }}
+          >
+            <Plus className="h-4 w-4" /> 添加功能项
+          </button>
+        </>
+      )}
+      <button
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+        onClick={() => { onRename?.(node.id, node.name); onClose(); }}
+      >
+        <Pencil className="h-4 w-4" /> 重命名
+      </button>
+      <button
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-accent"
+        onClick={() => { onDelete?.(node.id); onClose(); }}
+      >
+        <Trash2 className="h-4 w-4" /> 删除
+      </button>
+    </div>
+  );
+}
+
+// ─── Tree Item ────────────────────────────────────────
 
 function TreeItem({
   node,
   level = 0,
   selectedId,
   onSelect,
+  onContextMenu,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  dragOverId,
   expandedIds,
   toggleExpand,
 }: {
   node: TreeNode;
   level?: number;
   selectedId: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, type: "folder" | "file") => void;
+  onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
+  onDragStart: (nodeId: string) => void;
+  onDragOver: (e: React.DragEvent, nodeId: string) => void;
+  onDrop: (e: React.DragEvent, targetId: string) => void;
+  dragOverId: string | null;
   expandedIds: Set<string>;
   toggleExpand: (id: string) => void;
 }) {
   const isFolder = node.type === "folder";
   const isExpanded = expandedIds.has(node.id);
   const isSelected = selectedId === node.id;
+  const isDragOver = dragOverId === node.id;
 
   return (
     <div>
       <button
+        draggable
+        onDragStart={() => onDragStart(node.id)}
+        onDragOver={(e) => onDragOver(e, node.id)}
+        onDrop={(e) => onDrop(e, node.id)}
         onClick={() => {
-          if (isFolder) {
-            toggleExpand(node.id);
-          } else {
-            onSelect(node.id);
-          }
+          if (isFolder) toggleExpand(node.id);
+          onSelect(node.id, node.type);
         }}
+        onContextMenu={(e) => onContextMenu(e, node)}
         className={cn(
           "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
           "hover:bg-accent",
-          isSelected && !isFolder && "bg-accent font-medium"
+          isSelected && "bg-accent font-medium",
+          isDragOver && "border-t-2 border-primary"
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
       >
         {isFolder ? (
-          <ChevronRight
-            className={cn(
-              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
-              isExpanded && "rotate-90"
-            )}
-          />
+          <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isExpanded && "rotate-90")} />
         ) : (
           <span className="w-4" />
         )}
-        {isFolder ? (
-          <Folder className="h-4 w-4 shrink-0 text-primary" />
-        ) : (
-          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
+        {isFolder ? <Folder className="h-4 w-4 shrink-0 text-primary" /> : <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />}
         <span className="flex-1 truncate text-left">{node.name}</span>
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", getStatusColor(node.completionPercent))} />
       </button>
       {isFolder && isExpanded && node.children && (
         <div>
@@ -80,6 +166,11 @@ function TreeItem({
               level={level + 1}
               selectedId={selectedId}
               onSelect={onSelect}
+              onContextMenu={onContextMenu}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+              dragOverId={dragOverId}
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
             />
@@ -90,28 +181,56 @@ function TreeItem({
   );
 }
 
-export function FeatureTree({ data, selectedId, onSelect }: FeatureTreeProps) {
-  // Auto-expand all folders initially
+// ─── Feature Tree ─────────────────────────────────────
+
+export function FeatureTree({ data, selectedId, onSelect, onAddChild, onRename, onDelete, onReorder }: FeatureTreeProps) {
   const allFolderIds = new Set<string>();
   function collectFolders(nodes: TreeNode[]) {
     for (const n of nodes) {
-      if (n.type === "folder") {
-        allFolderIds.add(n.id);
-        collectFolders(n.children);
-      }
+      if (n.type === "folder") { allFolderIds.add(n.id); collectFolders(n.children); }
     }
   }
   collectFolders(data);
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(allFolderIds);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
+  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const handleDragStart = (nodeId: string) => setDragNodeId(nodeId);
+  const handleDragOver = (e: React.DragEvent, nodeId: string) => {
+    e.preventDefault();
+    setDragOverId(nodeId);
+  };
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverId(null);
+    if (!dragNodeId || dragNodeId === targetId) return;
+    // Find target's index among siblings
+    function findIndex(nodes: TreeNode[], id: string): number {
+      for (let i = 0; i < nodes.length; i++) {
+        if (nodes[i].id === id) return i;
+        const found = findIndex(nodes[i].children, id);
+        if (found >= 0) return found;
+      }
+      return -1;
+    }
+    const targetIndex = findIndex(data, targetId);
+    if (targetIndex >= 0) onReorder?.(dragNodeId, targetIndex);
+    setDragNodeId(null);
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, node: TreeNode) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, node });
   };
 
   return (
@@ -122,10 +241,26 @@ export function FeatureTree({ data, selectedId, onSelect }: FeatureTreeProps) {
           node={node}
           selectedId={selectedId}
           onSelect={onSelect}
+          onContextMenu={handleContextMenu}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          dragOverId={dragOverId}
           expandedIds={expandedIds}
           toggleExpand={toggleExpand}
         />
       ))}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          node={contextMenu.node}
+          onClose={() => setContextMenu(null)}
+          onAddChild={onAddChild}
+          onRename={onRename}
+          onDelete={onDelete}
+        />
+      )}
     </div>
   );
 }
