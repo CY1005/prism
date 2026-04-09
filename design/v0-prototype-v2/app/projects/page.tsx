@@ -5,8 +5,17 @@ import { Search, Bell, Plus, LogOut, Shield } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { projectsData, projectsStrings } from "@/lib/projects-data"
+import { cn } from "@/lib/utils"
+
+const typeColorMap: Record<string, string> = {
+  blue: "border-blue-200 text-blue-700 bg-blue-50",
+  green: "border-green-200 text-green-700 bg-green-50",
+  purple: "border-purple-200 text-purple-700 bg-purple-50",
+  orange: "border-orange-200 text-orange-700 bg-orange-50",
+}
 
 export default function ProjectsPage() {
   return (
@@ -48,58 +57,60 @@ export default function ProjectsPage() {
       {/* Page Title */}
       <div className="flex items-center justify-between px-6 py-4">
         <h1 className="text-xl font-semibold text-foreground">{projectsStrings.myProjects}</h1>
-        <Button variant="default">
-          <Plus className="mr-2 h-4 w-4" />
-          {projectsStrings.newProject}
+        <Button variant="default" asChild>
+          <Link href="/projects/new">
+            <Plus className="mr-2 h-4 w-4" />
+            {projectsStrings.newProject}
+          </Link>
         </Button>
       </div>
 
-      {/* Projects Grid */}
-      <div className="grid grid-cols-3 gap-4 px-6">
+      {/* Projects Grid - 2x2 */}
+      <div className="grid grid-cols-2 gap-4 px-6">
         {projectsData.map((project) => (
           <Link key={project.id} href={`/projects/${project.id}`}>
-          <Card className="border-border/60 p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all cursor-pointer">
-            <h3 className="font-semibold text-foreground">{project.title}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {project.description}
-            </p>
-            <div className="mt-3 flex gap-4">
-              <div>
-                <span className="text-2xl font-bold text-foreground">
-                  {project.productLines}
-                </span>
-                <p className="text-xs text-muted-foreground">{projectsStrings.productLine}</p>
+            <Card className="border-border/60 p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all cursor-pointer">
+              <div className="flex items-start justify-between">
+                <div>
+                  <Badge variant="outline" className={cn("text-xs mb-2", typeColorMap[project.typeColor])}>
+                    {project.type}
+                  </Badge>
+                  <h3 className="font-semibold text-foreground">{project.title}</h3>
+                </div>
               </div>
-              <div>
-                <span className="text-2xl font-bold text-foreground">
-                  {project.modules}
-                </span>
-                <p className="text-xs text-muted-foreground">{projectsStrings.module}</p>
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-primary">
-                  {project.completion}%
-                </span>
-                <p className="text-xs text-muted-foreground">{projectsStrings.completion}</p>
-              </div>
-            </div>
-            <div className="mt-4 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {projectsStrings.lastUpdated}{project.lastUpdated}
-              </span>
-              <div className="flex">
-                {project.members.map((member, index) => (
-                  <Avatar
-                    key={index}
-                    className={`h-6 w-6 border-2 border-card ${index > 0 ? "-ml-2" : ""}`}
-                  >
-                    <AvatarFallback className="bg-muted text-xs">
-                      {member}
-                    </AvatarFallback>
-                  </Avatar>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {project.description}
+              </p>
+              <div className="mt-3 flex gap-4">
+                {project.stats.map((stat, index) => (
+                  <div key={index}>
+                    <span className={cn(
+                      "text-2xl font-bold",
+                      index === project.stats.length - 1 ? "text-primary" : "text-foreground"
+                    )}>
+                      {stat.value}
+                    </span>
+                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  </div>
                 ))}
               </div>
-</div>
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {projectsStrings.lastUpdated}{project.lastUpdated}
+                </span>
+                <div className="flex">
+                  {project.members.map((member, index) => (
+                    <Avatar
+                      key={index}
+                      className={`h-6 w-6 border-2 border-card ${index > 0 ? "-ml-2" : ""}`}
+                    >
+                      <AvatarFallback className="bg-muted text-xs">
+                        {member}
+                      </AvatarFallback>
+                    </Avatar>
+                  ))}
+                </div>
+              </div>
             </Card>
           </Link>
         ))}

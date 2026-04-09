@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Breadcrumb,
@@ -43,7 +44,6 @@ import {
 } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
 import { testAnalysisData } from "@/lib/test-analysis-data"
-import { cn } from "@/lib/utils"
 
 // Version timeline data
 const versionData = [
@@ -86,7 +86,10 @@ export default function FeatureDetailPage() {
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-          <Link href="/projects" className="font-semibold text-sidebar-foreground hover:text-primary transition-colors">Prism</Link>
+          <div className="flex items-center gap-2">
+            <Link href="/projects" className="font-semibold text-sidebar-foreground hover:text-primary transition-colors">AI云平台竞品分析</Link>
+            <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">产品分析</Badge>
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -215,9 +218,9 @@ export default function FeatureDetailPage() {
               </div>
             </DimensionCard>
 
-            {/* Card 3: 平台侧技术 */}
+            {/* Card 3: 技术实现 */}
             <DimensionCard
-              title="平台侧技术"
+              title="技术实现"
               icon={Server}
               entryCount={2}
               defaultExpanded={true}
@@ -246,6 +249,9 @@ export default function FeatureDetailPage() {
                     <Badge variant="secondary">显存隔离</Badge>
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground mt-4">
+                  参考标准：Volcano (CNCF孵化·华为主导) · KServe (K8s模型serving标准)
+                </p>
               </div>
             </DimensionCard>
 
@@ -425,7 +431,7 @@ export default function FeatureDetailPage() {
             >
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <ClipboardList className="h-10 w-10 text-muted-foreground/40" />
-                <p className="mt-2 text-sm text-muted-foreground">点击添加需求分析</p>
+                <p className="mt-2 text-sm text-muted-foreground">点击添加，或上传需求文档自动分析</p>
               </div>
             </DimensionCard>
 
@@ -433,8 +439,8 @@ export default function FeatureDetailPage() {
             <DimensionCard
               title="竞品参考"
               icon={Building}
-              entryCount={1}
-              collapsedSummary="已参考 1 个竞品"
+              entryCount={3}
+              collapsedSummary="已对标 3 家竞品"
               defaultExpanded={false}
               onAdd={() => {}}
             >

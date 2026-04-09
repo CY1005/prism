@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Users, BarChart3, Settings } from "lucide-react"
+import { Users, BarChart3, Settings, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -34,6 +34,10 @@ export default function AdminPage() {
           <Button variant="ghost" className="w-full justify-start">
             <BarChart3 className="h-4 w-4 mr-2" />
             {adminStrings.platformStats}
+          </Button>
+          <Button variant="ghost" className="w-full justify-start">
+            <Layers className="h-4 w-4 mr-2" />
+            维度类型管理
           </Button>
           <Button variant="ghost" className="w-full justify-start">
             <Settings className="h-4 w-4 mr-2" />
