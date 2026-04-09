@@ -1,6 +1,8 @@
 # ADR-004: 自定义 LLMProvider 接口，不绑死 Vercel AI SDK
 
-## Status: Accepted
+## Status: Superseded by ADR-010
+
+> ADR-010 决定 AI 分析层改用 FastAPI (Python) 实现，LLMProvider 接口从 TypeScript 迁移到 Python。
 
 ## Context
 
