@@ -93,7 +93,8 @@ function renderDimensionContent(key: string, content: Record<string, unknown>) {
       return <p className="text-sm leading-relaxed">{content.text as string}</p>;
 
     case "user_scenario": {
-      const scenarios = content.scenarios as { role: string; scenario: string; techStack: string[] }[];
+      const scenarios = content.scenarios as { role: string; scenario: string; techStack: string[] }[] | undefined;
+      if (!Array.isArray(scenarios)) return <p className="text-sm">{content.text as string ?? JSON.stringify(content)}</p>;
       return (
         <div className="rounded-md border overflow-hidden">
           <table className="w-full text-sm">
@@ -121,7 +122,8 @@ function renderDimensionContent(key: string, content: Record<string, unknown>) {
     }
 
     case "tech_impl": {
-      const entries = content.entries as { title: string; text: string; tags: string[] }[];
+      const entries = content.entries as { title: string; text: string; tags: string[] }[] | undefined;
+      if (!Array.isArray(entries)) return <p className="text-sm">{content.text as string ?? JSON.stringify(content)}</p>;
       const ref = content.referenceStandards as string | undefined;
       return (
         <div className="space-y-3">
