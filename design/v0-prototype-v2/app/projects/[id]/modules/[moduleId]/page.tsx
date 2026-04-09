@@ -10,8 +10,6 @@ import {
   LogOut,
   Settings,
   Shield,
-  PanelLeftClose,
-  PanelLeft,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -43,8 +41,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { FeatureTree } from "@/components/feature-tree"
-import { treeData } from "@/lib/tree-data"
+
 import { moduleDetailData } from "@/lib/module-data"
 import { detailStrings } from "@/lib/project-detail-data"
 import { cn } from "@/lib/utils"
@@ -64,8 +61,6 @@ export default function ModuleOverviewPage() {
   const params = useParams()
   const projectId = params.id as string
   const moduleId = params.moduleId as string
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [selectedNode, setSelectedNode] = useState(moduleId)
   const [sortBy, setSortBy] = useState("completion")
 
   const moduleData = moduleDetailData[moduleId] || moduleDetailData["inference-service"]
