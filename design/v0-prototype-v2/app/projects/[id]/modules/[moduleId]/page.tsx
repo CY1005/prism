@@ -153,7 +153,7 @@ export default function ModuleOverviewPage() {
           产品线
         </Link>
         <Link href={`/projects/${projectId}/analysis`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
-          需求分析
+          需求工作台
         </Link>
         <Link href={`/projects/${projectId}/comparison`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           竞品对比

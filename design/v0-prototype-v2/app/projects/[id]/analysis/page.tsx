@@ -104,7 +104,7 @@ export default function AnalysisPage() {
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbPage>需求分析</BreadcrumbPage>
+              <BreadcrumbPage>需求工作台</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -119,7 +119,7 @@ export default function AnalysisPage() {
           产品线
         </Link>
         <Link href={`/projects/${projectId}/analysis`} className="border-b-2 border-primary text-primary font-medium pb-3 pt-2 text-sm">
-          需求分析
+          需求工作台
         </Link>
         <Link href={`/projects/${projectId}/comparison`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           竞品对比
@@ -136,9 +136,9 @@ export default function AnalysisPage() {
         <div className="max-w-4xl mx-auto p-6">
           {/* Input Card */}
           <Card className="border-border/60 shadow-sm p-6">
-            <h2 className="text-xl font-semibold">需求分析</h2>
+            <h2 className="text-xl font-semibold">需求工作台</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              输入新需求描述，AI 将分析影响范围、完整性和合理性
+              输入需求 → AI 分析影响范围与合理性 → 生成测试点 → 一键录入
             </p>
 
             {/* Input Type Tabs */}
@@ -242,6 +242,7 @@ export default function AnalysisPage() {
             {/* Impact Analysis */}
             <Card className="border-border/60 shadow-sm p-5">
               <div className="flex items-center gap-2 mb-4">
+                <Badge variant="outline" className="rounded-full text-xs px-2">Step 1</Badge>
                 <AlertTriangle className="h-5 w-5 text-orange-500" />
                 <h3 className="font-medium">{analysisResultData.impactAnalysis.title}</h3>
                 <Badge variant="destructive">涉及 {analysisResultData.impactAnalysis.affectedModulesCount} 个模块</Badge>
@@ -262,6 +263,7 @@ export default function AnalysisPage() {
             {/* Completeness Check */}
             <Card className="border-border/60 shadow-sm p-5">
               <div className="flex items-center gap-2 mb-4">
+                <Badge variant="outline" className="rounded-full text-xs px-2">Step 2</Badge>
                 <CheckCircle className="h-5 w-5 text-green-500" />
                 <h3 className="font-medium">{analysisResultData.completenessCheck.title}</h3>
               </div>
@@ -280,6 +282,7 @@ export default function AnalysisPage() {
             {/* Reasonability Evaluation */}
             <Card className="border-border/60 shadow-sm p-5">
               <div className="flex items-center gap-2 mb-4">
+                <Badge variant="outline" className="rounded-full text-xs px-2">Step 3</Badge>
                 <Scale className="h-5 w-5 text-yellow-500" />
                 <h3 className="font-medium">{analysisResultData.reasonabilityEval.title}</h3>
                 <Badge className="bg-yellow-50 text-yellow-700">{analysisResultData.reasonabilityEval.status}</Badge>
@@ -290,6 +293,7 @@ export default function AnalysisPage() {
             {/* Test Points */}
             <Card className="border-border/60 shadow-sm p-5">
               <div className="flex items-center gap-2 mb-4">
+                <Badge variant="outline" className="rounded-full text-xs px-2">Step 4</Badge>
                 <TestTube className="h-5 w-5 text-primary" />
                 <h3 className="font-medium">{analysisResultData.testPoints.title}</h3>
                 <Badge variant="secondary">{analysisResultData.testPoints.count} 条</Badge>
