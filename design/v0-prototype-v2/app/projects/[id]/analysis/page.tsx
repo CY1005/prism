@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useState } from "react"
 import {
   Search,
   Bell,
@@ -13,6 +14,10 @@ import {
   CheckCircle,
   Scale,
   TestTube,
+  Upload,
+  ImagePlus,
+  FileText,
+  X,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -43,6 +48,7 @@ import { analysisResultData } from "@/lib/analysis-data"
 export default function AnalysisPage() {
   const params = useParams()
   const projectId = params.id as string
+  const [inputType, setInputType] = useState<"text" | "file" | "image">("text")
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -134,10 +140,97 @@ export default function AnalysisPage() {
             <p className="text-sm text-muted-foreground mt-1">
               输入新需求描述，AI 将分析影响范围、完整性和合理性
             </p>
-            <Textarea
-              className="mt-4 min-h-[128px]"
-              placeholder="粘贴需求描述..."
-            />
+
+            {/* Input Type Tabs */}
+            <div className="flex gap-1 mt-4 p-1 bg-muted rounded-lg w-fit">
+              <button
+                onClick={() => setInputType("text")}
+                className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                  inputType === "text"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                文字描述
+              </button>
+              <button
+                onClick={() => setInputType("file")}
+                className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                  inputType === "file"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                上传文件
+              </button>
+              <button
+                onClick={() => setInputType("image")}
+                className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+                  inputType === "image"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                上传图片
+              </button>
+            </div>
+
+            {/* Input Content Area */}
+            <div className="mt-4">
+              {inputType === "text" && (
+                <Textarea
+                  className="min-h-[128px]"
+                  placeholder="输入需求描述，支持 Markdown 格式..."
+                />
+              )}
+
+              {inputType === "file" && (
+                <div className="space-y-3">
+                  <div className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-muted-foreground/50 transition-colors">
+                    <Upload className="h-10 w-10 text-muted-foreground mb-3" />
+                    <p className="text-sm text-foreground">拖拽文件到此处，或点击选择文件</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      支持 .doc .docx .pdf .txt .md 格式，单文件最大 10MB
+                    </p>
+                  </div>
+                  {/* Uploaded File Example */}
+                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                    <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">推理服务v3.9.3需求文档.docx</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">2.3MB</span>
+                    <button className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0">
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {inputType === "image" && (
+                <div className="space-y-3">
+                  <div className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-muted-foreground/50 transition-colors">
+                    <ImagePlus className="h-10 w-10 text-muted-foreground mb-3" />
+                    <p className="text-sm text-foreground">拖拽图片到此处，或点击选择图片</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      支持 .png .jpg .jpeg 格式，支持截图粘贴，单张最大 5MB
+                    </p>
+                  </div>
+                  {/* Uploaded Image Example */}
+                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="w-20 h-20 bg-muted rounded-md flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">需求原型截图.png</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground flex-shrink-0">856KB</span>
+                    <button className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0">
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-2 mt-4">
               <Button>开始分析</Button>
               <Button variant="outline">生成测试点</Button>
