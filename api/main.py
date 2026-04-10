@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import health, search, analyze
+from api.routers import health, search, analyze, projects
 
 app = FastAPI(
     title="Prism Analyzer",
@@ -19,6 +19,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(analyze.router, prefix="/api", tags=["analysis"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 
 if __name__ == "__main__":
     import uvicorn

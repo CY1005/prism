@@ -57,7 +57,7 @@ class Project(Base):
     version_mode = Column(Text, nullable=False, default="release")
     ai_provider = Column(Text, default="local")
     ai_api_key_enc = Column(Text)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    # created_by may not exist yet (migration pending)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 
@@ -132,8 +132,7 @@ class DimensionRecord(Base):
     dimension_type_id = Column(Integer, ForeignKey("dimension_types.id"), nullable=False)
     content = Column(JSONB, nullable=False)
     version = Column(Integer, nullable=False, default=1)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    # created_by, updated_by may not exist yet (migration pending)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 
@@ -163,7 +162,7 @@ class NodeRelation(Base):
     target_node_id = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
     relation_type = Column(Text, nullable=False, default="related_to")
     description = Column(Text)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    # created_by may not exist yet (migration pending)
     created_at = Column(DateTime, server_default=func.now())
 
 
