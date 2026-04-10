@@ -290,6 +290,29 @@ export async function removeProjectMember(
   }
 }
 
+export async function getMyProjectRole(
+  projectId: string,
+): Promise<"admin" | "editor" | "viewer" | null> {
+  const user = await requireAuth();
+
+  if (user.role === "platform_admin") return "admin";
+
+  const [member] = await db
+    .select({ role: projectMembers.role })
+    .from(projectMembers)
+    .where(
+      and(
+        eq(projectMembers.projectId, projectId),
+        eq(projectMembers.userId, user.id),
+      ),
+    );
+
+  if (!member) return null;
+
+  const role = member.role as "admin" | "editor" | "viewer";
+  return role;
+}
+
 export async function updateProjectAIConfig(
   projectId: string,
   provider: string,

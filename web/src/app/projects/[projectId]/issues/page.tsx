@@ -54,6 +54,7 @@ import {
 } from "@/components/ui/breadcrumb"
 import { detailStrings } from "@/lib/project-detail-data"
 import { getIssues, createIssue, updateIssue, deleteIssue } from "@/actions/issues"
+import { useProjectRole } from "@/contexts/project-role-context"
 
 type Issue = {
   id: string
@@ -132,6 +133,7 @@ function typeBadgeClass(type: string) {
 export default function IssuesPage() {
   const params = useParams()
   const projectId = params.projectId as string
+  const { isViewer } = useProjectRole()
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [loading, setLoading] = useState(true)
@@ -353,7 +355,11 @@ export default function IssuesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={openCreateDialog}>
+            <Button
+              onClick={openCreateDialog}
+              disabled={isViewer}
+              title={isViewer ? "查看者无编辑权限" : undefined}
+            >
               <Plus className="h-4 w-4 mr-2" />
               新建问题
             </Button>
@@ -423,10 +429,24 @@ export default function IssuesPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(issue)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => openEditDialog(issue)}
+                            disabled={isViewer}
+                            title={isViewer ? "查看者无编辑权限" : undefined}
+                          >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(issue.id)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive"
+                            onClick={() => handleDelete(issue.id)}
+                            disabled={isViewer}
+                            title={isViewer ? "查看者无编辑权限" : undefined}
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>

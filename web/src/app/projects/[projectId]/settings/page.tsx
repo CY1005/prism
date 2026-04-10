@@ -45,6 +45,7 @@ import {
   removeProjectMember,
   updateProjectAIConfig,
 } from "@/actions/projects"
+import { useProjectRole } from "@/contexts/project-role-context"
 
 type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai"
 
@@ -118,6 +119,7 @@ const ROLE_BADGE: Record<string, { label: string; variant: string }> = {
 
 export default function ProjectSettingsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = use(params)
+  const { canAdmin } = useProjectRole()
   const [activeTab, setActiveTab] = useState<TabType>("dimensions")
   const [project, setProject] = useState<ProjectData | null>(null)
   const [members, setMembers] = useState<MemberData[]>([])
@@ -320,7 +322,12 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                     <span className="text-xs text-muted-foreground">（创建后不可更改）</span>
                   </div>
                 </div>
-                <Button variant="default" onClick={handleSaveBasic} disabled={saving}>
+                <Button
+                  variant="default"
+                  onClick={handleSaveBasic}
+                  disabled={saving || !canAdmin}
+                  title={!canAdmin ? "查看者无编辑权限" : undefined}
+                >
                   {saving ? "保存中..." : "保存"}
                 </Button>
               </div>
@@ -362,7 +369,13 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               </div>
 
               <div className="mt-6">
-                <Button variant="default">保存</Button>
+                <Button
+                  variant="default"
+                  disabled={!canAdmin}
+                  title={!canAdmin ? "查看者无编辑权限" : undefined}
+                >
+                  保存
+                </Button>
               </div>
             </div>
           )}
@@ -387,7 +400,12 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                     <Label>第3层</Label>
                     <Input value={level3} onChange={(e) => setLevel3(e.target.value)} />
                   </div>
-                  <Button variant="default" onClick={handleSaveHierarchy} disabled={saving}>
+                  <Button
+                    variant="default"
+                    onClick={handleSaveHierarchy}
+                    disabled={saving || !canAdmin}
+                    title={!canAdmin ? "查看者无编辑权限" : undefined}
+                  >
                     {saving ? "保存中..." : "保存"}
                   </Button>
                 </div>
@@ -435,7 +453,12 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                       <SelectItem value="viewer">查看者</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button variant="default" onClick={handleInvite} disabled={saving}>
+                  <Button
+                    variant="default"
+                    onClick={handleInvite}
+                    disabled={saving || !canAdmin}
+                    title={!canAdmin ? "查看者无编辑权限" : undefined}
+                  >
                     <UserPlus className="h-4 w-4 mr-2" />
                     {settingsStrings.inviteMember}
                   </Button>
@@ -476,8 +499,10 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                           </TableCell>
                           <TableCell>
                             <button
-                              className="text-sm text-destructive hover:underline"
-                              onClick={() => handleRemoveMember(member.userId)}
+                              className="text-sm text-destructive hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => canAdmin && handleRemoveMember(member.userId)}
+                              disabled={!canAdmin}
+                              title={!canAdmin ? "查看者无编辑权限" : undefined}
                             >
                               {settingsStrings.remove}
                             </button>
@@ -521,7 +546,12 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                   <Label>API Key</Label>
                   <Input type="password" placeholder="sk-..." value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)} />
                 </div>
-                <Button variant="default" onClick={handleSaveAI} disabled={saving}>
+                <Button
+                  variant="default"
+                  onClick={handleSaveAI}
+                  disabled={saving || !canAdmin}
+                  title={!canAdmin ? "查看者无编辑权限" : undefined}
+                >
                   {saving ? "保存中..." : settingsStrings.saveConfig}
                 </Button>
               </div>
