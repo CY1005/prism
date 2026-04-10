@@ -49,6 +49,23 @@ async function seed() {
       { key: "deployment", name: "部署配置", icon: "Server", description: "部署架构与运维配置" },
       { key: "quality_metric", name: "质量指标", icon: "BarChart3", description: "准确率、延迟等量化指标" },
       { key: "cost_analysis", name: "成本分析", icon: "DollarSign", description: "资源成本与ROI分析" },
+      {
+        key: "competitive_ref",
+        name: "竞品对标",
+        icon: "Target",
+        description: "竞品功能详细对标参考",
+        fieldSchema: {
+          type: "object",
+          properties: {
+            competitorName: { type: "string", title: "竞品名称" },
+            version: { type: "string", title: "版本号" },
+            coverage: { type: "string", title: "覆盖范围" },
+            techApproach: { type: "string", title: "技术方案" },
+            pros: { type: "string", title: "优势" },
+            cons: { type: "string", title: "劣势" },
+          },
+        },
+      },
     ])
     .returning();
 

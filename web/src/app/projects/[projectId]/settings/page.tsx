@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { use } from "react"
 import { Bell, UserPlus, LogOut, GripVertical, FileText, Users, Server, GitBranch, Lightbulb, TestTube, ClipboardList, Building, FileCode, Gauge, DollarSign, Folder, File } from "lucide-react"
@@ -36,10 +36,61 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ChevronRight } from "lucide-react"
-import { settingsStrings, settingsMembers } from "@/lib/settings-data"
 import { cn } from "@/lib/utils"
+import { getProject } from "@/actions/projects"
+import {
+  updateProject,
+  getProjectMembers,
+  addProjectMember,
+  removeProjectMember,
+  updateProjectAIConfig,
+} from "@/actions/project-settings"
 
 type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai"
+
+const settingsStrings = {
+  myProjects: "我的项目",
+  settings: "设置",
+  basicInfo: "基本信息",
+  memberManagement: "成员管理",
+  aiConfig: "AI配置",
+  inviteMember: "邀请成员",
+  avatar: "头像",
+  username: "用户名",
+  email: "邮箱",
+  role: "角色",
+  action: "操作",
+  admin: "管理员",
+  editor: "编辑者",
+  viewer: "查看者",
+  editRole: "修改角色",
+  remove: "移除",
+  aiProvider: "AI Provider",
+  localMode: "本地模式",
+  saveConfig: "保存配置",
+  userName: "陈琦",
+  userInitials: "陈",
+}
+
+type ProjectData = {
+  id: string
+  name: string
+  description: string | null
+  templateType: string
+  hierarchyLabels: string[]
+  versionMode: string
+  aiProvider: string | null
+  aiApiKeyEnc: string | null
+}
+
+type MemberData = {
+  id: string
+  userId: string
+  role: string
+  createdAt: Date
+  userName: string
+  userEmail: string
+}
 
 const enabledDimensions = [
   { id: "desc", name: "功能描述", description: "功能的核心说明", icon: FileText },
@@ -59,12 +110,89 @@ const disabledDimensions = [
   { id: "cost", name: "成本分析", description: "资源成本与ROI分析", icon: DollarSign },
 ]
 
+const ROLE_BADGE: Record<string, { label: string; variant: string }> = {
+  admin: { label: "管理员", variant: "default" },
+  editor: { label: "编辑者", variant: "green" },
+  viewer: { label: "查看者", variant: "secondary" },
+}
+
 export default function ProjectSettingsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = use(params)
   const [activeTab, setActiveTab] = useState<TabType>("dimensions")
+  const [project, setProject] = useState<ProjectData | null>(null)
+  const [members, setMembers] = useState<MemberData[]>([])
+  const [projectName, setProjectName] = useState("")
+  const [projectDescription, setProjectDescription] = useState("")
   const [level1, setLevel1] = useState("产品线")
   const [level2, setLevel2] = useState("模块")
   const [level3, setLevel3] = useState("功能项")
+  const [aiProvider, setAiProvider] = useState("local")
+  const [aiApiKey, setAiApiKey] = useState("")
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState("viewer")
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getProject(projectId).then((p) => {
+      if (p) {
+        setProject(p as ProjectData)
+        setProjectName(p.name)
+        setProjectDescription(p.description || "")
+        const labels = p.hierarchyLabels as string[]
+        if (labels?.length >= 3) {
+          setLevel1(labels[0])
+          setLevel2(labels[1])
+          setLevel3(labels[2])
+        }
+        setAiProvider(p.aiProvider || "local")
+      }
+    })
+    loadMembers()
+  }, [projectId])
+
+  const loadMembers = async () => {
+    try {
+      const m = await getProjectMembers(projectId)
+      setMembers(m as MemberData[])
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleSaveBasic = async () => {
+    setSaving(true)
+    await updateProject(projectId, { name: projectName, description: projectDescription })
+    setSaving(false)
+  }
+
+  const handleSaveHierarchy = async () => {
+    setSaving(true)
+    await updateProject(projectId, { hierarchyLabels: [level1, level2, level3] })
+    setSaving(false)
+  }
+
+  const handleSaveAI = async () => {
+    setSaving(true)
+    await updateProjectAIConfig(projectId, aiProvider, aiApiKey || null)
+    setSaving(false)
+  }
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return
+    setSaving(true)
+    const result = await addProjectMember(projectId, inviteEmail, inviteRole)
+    if (result.success) {
+      setInviteEmail("")
+      await loadMembers()
+    }
+    setSaving(false)
+  }
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!confirm("确认移除该成员？")) return
+    await removeProjectMember(projectId, userId)
+    await loadMembers()
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -98,7 +226,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbLink href={`/projects/${projectId}`}>{settingsStrings.projectName}</BreadcrumbLink>
+              <BreadcrumbLink href={`/projects/${projectId}`}>{project?.name || "项目"}</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
@@ -177,22 +305,24 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               <div className="space-y-4 max-w-md">
                 <div className="space-y-2">
                   <Label>项目名称</Label>
-                  <Input defaultValue="AI云平台竞品分析" />
+                  <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>项目描述</Label>
-                  <Input defaultValue="系统性分析AI云平台行业竞品设计与技术" />
+                  <Input value={projectDescription} onChange={(e) => setProjectDescription(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>项目类型</Label>
                   <div className="flex items-center gap-2 py-2">
                     <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">
-                      产品竞品分析
+                      {project?.templateType || "custom"}
                     </Badge>
                     <span className="text-xs text-muted-foreground">（创建后不可更改）</span>
                   </div>
                 </div>
-                <Button variant="default">保存</Button>
+                <Button variant="default" onClick={handleSaveBasic} disabled={saving}>
+                  {saving ? "保存中..." : "保存"}
+                </Button>
               </div>
             </div>
           )}
@@ -257,7 +387,9 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                     <Label>第3层</Label>
                     <Input value={level3} onChange={(e) => setLevel3(e.target.value)} />
                   </div>
-                  <Button variant="default">保存</Button>
+                  <Button variant="default" onClick={handleSaveHierarchy} disabled={saving}>
+                    {saving ? "保存中..." : "保存"}
+                  </Button>
                 </div>
 
                 <Card className="p-4 w-[200px]">
@@ -286,10 +418,28 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-semibold">{settingsStrings.memberManagement}</h2>
-                <Button variant="default">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  {settingsStrings.inviteMember}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="输入邮箱"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="w-48"
+                  />
+                  <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">管理员</SelectItem>
+                      <SelectItem value="editor">编辑者</SelectItem>
+                      <SelectItem value="viewer">查看者</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="default" onClick={handleInvite} disabled={saving}>
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    {settingsStrings.inviteMember}
+                  </Button>
+                </div>
               </div>
 
               <div className="rounded-md border border-border overflow-hidden">
@@ -304,35 +454,44 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {settingsMembers.map((member) => (
-                      <TableRow key={member.email}>
-                        <TableCell>
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-muted text-sm">{member.initials}</AvatarFallback>
-                          </Avatar>
-                        </TableCell>
-                        <TableCell className="font-medium">{member.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{member.email}</TableCell>
-                        <TableCell>
-                          {member.roleVariant === "green" ? (
-                            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{member.role}</Badge>
-                          ) : (
-                            <Badge variant={member.roleVariant}>{member.role}</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {member.canEdit ? (
-                            <span className="text-sm">
-                              <button className="text-primary hover:underline">{settingsStrings.editRole}</button>
-                              <span className="text-muted-foreground mx-1">·</span>
-                              <button className="text-primary hover:underline">{settingsStrings.remove}</button>
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
+                    {members.map((member) => {
+                      const roleInfo = ROLE_BADGE[member.role] || { label: member.role, variant: "secondary" }
+                      return (
+                        <TableRow key={member.id}>
+                          <TableCell>
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-muted text-sm">
+                                {member.userName?.charAt(0) || "?"}
+                              </AvatarFallback>
+                            </Avatar>
+                          </TableCell>
+                          <TableCell className="font-medium">{member.userName}</TableCell>
+                          <TableCell className="text-muted-foreground">{member.userEmail}</TableCell>
+                          <TableCell>
+                            {roleInfo.variant === "green" ? (
+                              <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{roleInfo.label}</Badge>
+                            ) : (
+                              <Badge variant={roleInfo.variant as "default" | "secondary"}>{roleInfo.label}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <button
+                              className="text-sm text-destructive hover:underline"
+                              onClick={() => handleRemoveMember(member.userId)}
+                            >
+                              {settingsStrings.remove}
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                    {members.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                          暂无成员
                         </TableCell>
                       </TableRow>
-                    ))}
+                    )}
                   </TableBody>
                 </Table>
               </div>
@@ -346,7 +505,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               <div className="space-y-4 max-w-md">
                 <div className="space-y-2">
                   <Label>{settingsStrings.aiProvider}</Label>
-                  <Select defaultValue="local">
+                  <Select value={aiProvider} onValueChange={(v) => v && setAiProvider(v)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -360,9 +519,11 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                 </div>
                 <div className="space-y-2">
                   <Label>API Key</Label>
-                  <Input type="password" placeholder="sk-..." />
+                  <Input type="password" placeholder="sk-..." value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)} />
                 </div>
-                <Button variant="default">{settingsStrings.saveConfig}</Button>
+                <Button variant="default" onClick={handleSaveAI} disabled={saving}>
+                  {saving ? "保存中..." : settingsStrings.saveConfig}
+                </Button>
               </div>
             </div>
           )}

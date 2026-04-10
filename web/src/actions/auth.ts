@@ -19,7 +19,7 @@ export async function register(formData: FormData): Promise<ActionResult<{ id: s
 
     const parsed = registerSchema.safeParse(raw);
     if (!parsed.success) {
-      const firstError = parsed.error.errors[0]?.message || "输入格式错误";
+      const firstError = parsed.error.issues[0]?.message || "输入格式错误";
       return actionError(new Error(firstError));
     }
 

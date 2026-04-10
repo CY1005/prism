@@ -158,6 +158,9 @@ export default function ModuleOverviewPage() {
         <Link href={`/projects/${projectId}/comparison`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           竞品对比
         </Link>
+        <Link href={`/projects/${projectId}/issues`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          问题沉淀
+        </Link>
         <div className="flex-1" />
         <Link href={`/projects/${projectId}/settings`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm flex items-center gap-1">
           <Settings className="h-3.5 w-3.5" />
@@ -192,7 +195,7 @@ export default function ModuleOverviewPage() {
           {/* Feature List */}
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-medium">功能项列表</h3>
-            <Select value={sortBy} onValueChange={setSortBy}>
+            <Select value={sortBy} onValueChange={(v) => v && setSortBy(v)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>

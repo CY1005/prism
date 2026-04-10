@@ -8,7 +8,7 @@ import {
   dimensionTypes,
   projectDimensionConfigs,
 } from "@/db/schema";
-import { eq, and, asc, isNull } from "drizzle-orm";
+import { eq, and, asc, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
@@ -465,6 +465,36 @@ export async function getFolderOverview(
   );
 
   return result;
+}
+
+export async function getCompetitiveRecords(projectId: string) {
+  const user = await requireAuth();
+  await checkProjectAccess(user.id, projectId, "viewer");
+
+  const competitiveKeys = ["competitive_ref", "competitor"];
+
+  const records = await db
+    .select({
+      nodeId: nodes.id,
+      nodeName: nodes.name,
+      nodePath: nodes.path,
+      recordId: dimensionRecords.id,
+      content: dimensionRecords.content,
+    })
+    .from(dimensionRecords)
+    .innerJoin(nodes, eq(dimensionRecords.nodeId, nodes.id))
+    .innerJoin(
+      dimensionTypes,
+      eq(dimensionRecords.dimensionTypeId, dimensionTypes.id),
+    )
+    .where(
+      and(
+        eq(nodes.projectId, projectId),
+        inArray(dimensionTypes.key, competitiveKeys),
+      ),
+    );
+
+  return records;
 }
 
 export async function updateNodeSortOrder(

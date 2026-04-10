@@ -85,7 +85,7 @@ export function ProtoVersionTimeline({ versions }: VersionTimelineProps) {
                     )}
                   </div>
                   {node.details && (
-                    <CollapsibleTrigger asChild>
+                    <CollapsibleTrigger>
                       <Button variant="ghost" size="icon" className="h-6 w-6 -mt-0.5">
                         <ChevronDown
                           className={cn(

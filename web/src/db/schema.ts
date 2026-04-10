@@ -193,6 +193,28 @@ export const projectTemplates = pgTable("project_templates", {
   dimensionKeys: jsonb("dimension_keys").$type<string[]>().notNull(),
 });
 
+// ─── Issues (问题沉淀) ─────────────────────────────────
+
+export const issues = pgTable("issues", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  nodeId: uuid("node_id").references(() => nodes.id, {
+    onDelete: "set null",
+  }),
+  type: text("type").notNull(), // 'bug' | 'tech_debt' | 'design_flaw'
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  severity: text("severity").notNull().default("medium"), // 'critical' | 'high' | 'medium' | 'low'
+  status: text("status").notNull().default("open"), // 'open' | 'resolved' | 'wontfix'
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // ─── Knowledge Items (shared with FastAPI analyzer) ─────
 
 export const knowledgeItems = pgTable("knowledge_items", {

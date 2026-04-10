@@ -40,12 +40,19 @@ const buttonVariants = cva(
   }
 )
 
+type ButtonProps = Omit<ButtonPrimitive.Props, 'render'> &
+  VariantProps<typeof buttonVariants> & {
+    /** Accepted for compatibility; currently unused. */
+    asChild?: boolean;
+  };
+
 function Button({
   className,
   variant = "default",
   size = "default",
+  asChild: _asChild,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonProps) {
   return (
     <ButtonPrimitive
       data-slot="button"

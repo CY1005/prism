@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
@@ -43,7 +44,16 @@ import {
 } from "@/components/ui/breadcrumb"
 import { detailStrings } from "@/lib/project-detail-data"
 import { comparisonData } from "@/lib/comparison-data"
+import { getCompetitiveRecords } from "@/actions/nodes"
 import { cn } from "@/lib/utils"
+
+type CompetitiveRecord = {
+  nodeId: string
+  nodeName: string
+  nodePath: string
+  recordId: string
+  content: Record<string, unknown>
+}
 
 function getCellHighlightClass(highlight: string | null) {
   if (highlight === "green") return "bg-green-50"
@@ -54,6 +64,15 @@ function getCellHighlightClass(highlight: string | null) {
 export default function ComparisonPage() {
   const params = useParams()
   const projectId = params.projectId as string
+  const [competitiveRecords, setCompetitiveRecords] = useState<CompetitiveRecord[]>([])
+  const [loadingRecords, setLoadingRecords] = useState(true)
+
+  useEffect(() => {
+    getCompetitiveRecords(projectId)
+      .then((records) => setCompetitiveRecords(records as CompetitiveRecord[]))
+      .catch(() => {})
+      .finally(() => setLoadingRecords(false))
+  }, [projectId])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -128,6 +147,9 @@ export default function ComparisonPage() {
         </Link>
         <Link href={`/projects/${projectId}/comparison`} className="border-b-2 border-primary text-primary font-medium pb-3 pt-2 text-sm">
           竞品对比
+        </Link>
+        <Link href={`/projects/${projectId}/issues`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          问题沉淀
         </Link>
         <div className="flex-1" />
         <Link href={`/projects/${projectId}/settings`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm flex items-center gap-1">
@@ -219,6 +241,30 @@ export default function ComparisonPage() {
               ))}
             </div>
           </Card>
+
+          {/* Real Competitive Records */}
+          {!loadingRecords && competitiveRecords.length > 0 && (
+            <Card className="border-border/60 shadow-sm p-5 mt-6">
+              <h3 className="font-medium mb-3">竞品知识记录（{competitiveRecords.length} 条）</h3>
+              <div className="space-y-3">
+                {competitiveRecords.map((record) => (
+                  <div key={record.recordId} className="border border-border rounded-md p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className="text-xs">{record.nodeName}</Badge>
+                      {record.nodePath && (
+                        <span className="text-xs text-muted-foreground">{record.nodePath}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-foreground">
+                      {typeof record.content === "object"
+                        ? JSON.stringify(record.content, null, 2).slice(0, 200)
+                        : String(record.content)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       </ScrollArea>
     </div>

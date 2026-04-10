@@ -59,7 +59,7 @@ export function ProtoDimensionCard({
                   添加
                 </Button>
               )}
-              <CollapsibleTrigger asChild>
+              <CollapsibleTrigger>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
                   <ChevronDown
                     className={cn(

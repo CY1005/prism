@@ -59,12 +59,12 @@ type DimensionConfig = {
 };
 
 type NodeData = {
-  node: { id: string; name: string; parentId: string | null; path: string };
+  node: { id: string; name: string; parentId: string | null; path: string; [key: string]: unknown };
   records: {
-    record: { id: string; dimensionTypeId: number; content: Record<string, unknown> };
-    dimType: { id: number; key: string; name: string };
+    record: { id: string; dimensionTypeId: number; content: Record<string, unknown>; [key: string]: unknown };
+    dimType: { id: number; key: string; name: string; [key: string]: unknown };
   }[];
-  versions: { id: string; versionLabel: string; summary: string; isCurrent: boolean }[];
+  versions: { id: string; versionLabel: string; summary: string; isCurrent?: boolean; [key: string]: unknown }[];
 };
 
 type FolderChild = {
@@ -335,7 +335,7 @@ export function ProjectWorkspace({
       } catch {
         content = { text: editDimContent };
       }
-      await updateDimensionRecord(editDimRecordId, content);
+      await updateDimensionRecord(editDimRecordId, content, 1);
       setEditDimDialog(false);
       const data = await getNodeWithDimensions(nodeData.node.id);
       setNodeData(data);

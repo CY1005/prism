@@ -8,6 +8,7 @@ import {
   dimensionTypes,
   projectTemplates,
   projectMembers,
+  users,
 } from "@/db/schema";
 import { eq, count, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -70,7 +71,7 @@ export async function createProject(formData: FormData): Promise<ActionResult<{ 
 
     const parsed = createProjectSchema.safeParse(raw);
     if (!parsed.success) {
-      return actionError(new AppError(parsed.error.errors[0]?.message || "输入格式错误", "blocking", "VALIDATION_ERROR"));
+      return actionError(new AppError(parsed.error.issues[0]?.message || "输入格式错误", "blocking", "VALIDATION_ERROR"));
     }
 
     const { name, description, templateType } = parsed.data;
@@ -99,13 +100,7 @@ export async function createProject(formData: FormData): Promise<ActionResult<{ 
         .returning();
 
       // 获取模板维度并创建配置
-      const templateDims = await tx
-        .select()
-        .from(dimensionTypes)
-        .where(
-          // 用 in 查询模板的维度keys不太方便，先查全部再filter
-        );
-
+      // 用 in 查询模板的维度keys不太方便，先查全部再filter
       const allDims = await tx.select().from(dimensionTypes);
       const enabledDims = allDims.filter((d) => template.dimensionKeys.includes(d.key));
 
@@ -134,6 +129,194 @@ export async function createProject(formData: FormData): Promise<ActionResult<{ 
     revalidatePath("/");
 
     return actionSuccess({ id: result.id });
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+// ─── Project Settings ─────────────────────────────────
+
+export async function updateProject(
+  projectId: string,
+  data: {
+    name?: string;
+    description?: string;
+    hierarchyLabels?: string[];
+    versionMode?: string;
+  },
+): Promise<ActionResult> {
+  try {
+    const user = await requireAuth();
+    await checkProjectAccess(user.id, projectId, "admin");
+
+    if (data.name !== undefined && data.name.trim() === "") {
+      return actionError(new AppError("项目名称不能为空", "blocking", "VALIDATION_ERROR"));
+    }
+
+    await db
+      .update(projects)
+      .set({
+        ...(data.name !== undefined && { name: data.name.trim() }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.hierarchyLabels !== undefined && { hierarchyLabels: data.hierarchyLabels }),
+        ...(data.versionMode !== undefined && { versionMode: data.versionMode }),
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, projectId));
+
+    logger.action("project.update", user.id, { projectId });
+    revalidatePath(`/projects/${projectId}`);
+
+    return actionSuccess(undefined);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function getProjectMembers(projectId: string) {
+  const user = await requireAuth();
+  await checkProjectAccess(user.id, projectId, "viewer");
+
+  const members = await db
+    .select({
+      id: projectMembers.id,
+      userId: projectMembers.userId,
+      role: projectMembers.role,
+      createdAt: projectMembers.createdAt,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(projectMembers)
+    .innerJoin(users, eq(projectMembers.userId, users.id))
+    .where(eq(projectMembers.projectId, projectId));
+
+  return members;
+}
+
+export async function addProjectMember(
+  projectId: string,
+  email: string,
+  role: string,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireAuth();
+    await checkProjectAccess(user.id, projectId, "admin");
+
+    // 查找目标用户
+    const [targetUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email));
+
+    if (!targetUser) {
+      return actionError(new AppError("未找到该邮箱对应的用户", "blocking", "NOT_FOUND", 404));
+    }
+
+    // 检查是否已是成员
+    const [existing] = await db
+      .select()
+      .from(projectMembers)
+      .where(
+        and(
+          eq(projectMembers.projectId, projectId),
+          eq(projectMembers.userId, targetUser.id),
+        ),
+      );
+
+    if (existing) {
+      return actionError(new AppError("该用户已是项目成员", "blocking", "DUPLICATE_ENTRY", 409));
+    }
+
+    const [member] = await db
+      .insert(projectMembers)
+      .values({
+        projectId,
+        userId: targetUser.id,
+        role,
+      })
+      .returning();
+
+    logger.action("project.addMember", user.id, { projectId, targetUserId: targetUser.id, role });
+    revalidatePath(`/projects/${projectId}/settings`);
+
+    return actionSuccess({ id: member.id });
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function removeProjectMember(
+  projectId: string,
+  userId: string,
+): Promise<ActionResult> {
+  try {
+    const currentUser = await requireAuth();
+    await checkProjectAccess(currentUser.id, projectId, "admin");
+
+    // 不允许移除自己（项目至少需要一个管理员）
+    if (userId === currentUser.id) {
+      return actionError(new AppError("不能移除自己", "blocking", "VALIDATION_ERROR"));
+    }
+
+    const [member] = await db
+      .select()
+      .from(projectMembers)
+      .where(
+        and(
+          eq(projectMembers.projectId, projectId),
+          eq(projectMembers.userId, userId),
+        ),
+      );
+
+    if (!member) {
+      return actionError(new AppError("该用户不是项目成员", "blocking", "NOT_FOUND", 404));
+    }
+
+    await db
+      .delete(projectMembers)
+      .where(
+        and(
+          eq(projectMembers.projectId, projectId),
+          eq(projectMembers.userId, userId),
+        ),
+      );
+
+    logger.action("project.removeMember", currentUser.id, { projectId, removedUserId: userId });
+    revalidatePath(`/projects/${projectId}/settings`);
+
+    return actionSuccess(undefined);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function updateProjectAIConfig(
+  projectId: string,
+  provider: string,
+  apiKeyEnc: string | null,
+): Promise<ActionResult> {
+  try {
+    const user = await requireAuth();
+    await checkProjectAccess(user.id, projectId, "admin");
+
+    const validProviders = ["local", "claude", "codex", "kimi"];
+    if (!validProviders.includes(provider)) {
+      return actionError(new AppError("无效的AI提供商", "blocking", "VALIDATION_ERROR"));
+    }
+
+    await db
+      .update(projects)
+      .set({
+        aiProvider: provider,
+        aiApiKeyEnc: apiKeyEnc,
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, projectId));
+
+    logger.action("project.updateAIConfig", user.id, { projectId, provider });
+    revalidatePath(`/projects/${projectId}/settings`);
+
+    return actionSuccess(undefined);
   } catch (error) {
     return actionError(error);
   }
