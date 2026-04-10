@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from api.db import get_db
 from api.models.tables import KnowledgeItem, Node
+from api.schemas.search import SearchResponse
+from api.services.search import unified_search
 
 router = APIRouter()
 
@@ -95,6 +97,17 @@ def delete_knowledge_item(item_id: str, db: Session = Depends(get_db)):
     db.delete(ki)
     db.commit()
     return {"status": "deleted"}
+
+
+@router.get("/unified", response_model=SearchResponse)
+def search_unified(
+    q: str = Query(..., min_length=1),
+    project_id: str | None = None,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Unified search across nodes, dimension records, and knowledge items."""
+    return unified_search(db=db, query=q, project_id=project_id, limit=limit)
 
 
 @router.get("/nodes")

@@ -89,9 +89,7 @@ class Node(Base):
     depth = Column(Integer, nullable=False, default=0)
     sort_order = Column(Integer, nullable=False, default=0)
     path = Column(Text, nullable=False, default="")
-    # current_version_id may not exist yet in DB (migration pending)
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    # current_version_id, created_by, updated_by may not exist yet (migration pending)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 
