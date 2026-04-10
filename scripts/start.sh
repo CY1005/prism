@@ -29,7 +29,7 @@ fi
 
 # 2. 启动 Docker 服务 (PostgreSQL + API)
 info "启动 Docker 服务..."
-docker compose up -d --build
+DOCKER_BUILDKIT=0 docker compose up -d --build --pull=false
 
 # 等待 PostgreSQL 就绪
 echo -n "等待 PostgreSQL 就绪"

@@ -114,6 +114,12 @@ export default function ProjectOverviewPage() {
         <Link href={`/projects/${projectId}/comparison`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           竞品对比
         </Link>
+        <Link href={`/projects/${projectId}/relation-graph`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          关系图
+        </Link>
+        <Link href={`/projects/${projectId}/insights`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          行业动态
+        </Link>
         <div className="flex-1" />
         <Link href={`/projects/${projectId}/settings`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm flex items-center gap-1">
           <Settings className="h-3.5 w-3.5" />
