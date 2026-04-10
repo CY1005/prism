@@ -5,9 +5,11 @@ from api.db import get_db
 from api.schemas.project import ProjectStats, ProjectTreeOverview
 from api.schemas.project_list import ProjectListResponse, ProjectCreateRequest, ProjectCreateResponse
 from api.schemas.comparison import ComparisonResponse
+from api.schemas.relations import RelationGraphResponse
 from api.services.project_stats import get_project_stats, get_project_tree_overview
 from api.services.project_crud import list_projects, create_project
 from api.services.comparison import get_comparison_data
+from api.services.relations import get_relation_graph
 
 router = APIRouter()
 
@@ -41,6 +43,12 @@ def project_comparison(
 ):
     """Get comparison data for a project from dimension records."""
     return get_comparison_data(db, project_id, dimension_key)
+
+
+@router.get("/{project_id}/relations", response_model=RelationGraphResponse)
+def project_relations(project_id: str, db: Session = Depends(get_db)):
+    """Get module relation graph (nodes + edges) for React Flow."""
+    return get_relation_graph(db, project_id)
 
 
 @router.get("/{project_id}/tree-overview", response_model=ProjectTreeOverview)
