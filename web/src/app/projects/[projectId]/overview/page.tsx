@@ -31,7 +31,7 @@ function getStatusColor(percent: number) {
 
 export default function ProjectOverviewPage() {
   const params = useParams()
-  const projectId = params.id as string
+  const projectId = params.projectId as string
   const [isEmptyProject, setIsEmptyProject] = useState(projectId === "3")
   const [realStats, setRealStats] = useState<ProjectStats | null>(null)
   const [realTree, setRealTree] = useState<TreeNodeOverview[] | null>(null)

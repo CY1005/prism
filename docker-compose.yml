@@ -10,6 +10,24 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prism"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  analyzer:
+    build: ./api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      DATABASE_URL: postgresql://prism:prism_dev_2026@db:5432/prism
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      AUTH_SECRET: ${AUTH_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

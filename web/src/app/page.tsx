@@ -1,7 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { getProjects } from "@/actions/projects";
 
 export default async function Home() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
   const projectList = await getProjects();
 
   return (

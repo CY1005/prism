@@ -60,7 +60,7 @@ function formatFileSize(bytes: number): string {
 
 export default function AnalysisPage() {
   const params = useParams()
-  const projectId = params.id as string
+  const projectId = params.projectId as string
   const [requirementText, setRequirementText] = useState("")
   const [isAnalyzed, setIsAnalyzed] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -317,44 +317,32 @@ export default function AnalysisPage() {
             <TooltipProvider>
               <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 bg-background shadow-sm"
-                    >
-                      <Type className="h-4 w-4" />
-                    </Button>
+                  <TooltipTrigger
+                    className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md bg-background shadow-sm hover:bg-accent"
+                  >
+                    <Type className="h-4 w-4" />
                   </TooltipTrigger>
                   <TooltipContent>文字输入</TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 hover:bg-background"
-                      onClick={() => documentInputRef.current?.click()}
-                      disabled={uploadedFiles.length >= MAX_DOCUMENTS}
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
+                  <TooltipTrigger
+                    className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md hover:bg-background disabled:opacity-50"
+                    onClick={() => documentInputRef.current?.click()}
+                    disabled={uploadedFiles.length >= MAX_DOCUMENTS}
+                  >
+                    <FileText className="h-4 w-4" />
                   </TooltipTrigger>
                   <TooltipContent>
                     上传文档 ({uploadedFiles.length}/{MAX_DOCUMENTS})
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 hover:bg-background"
-                      onClick={() => imageInputRef.current?.click()}
-                      disabled={uploadedImages.length >= MAX_IMAGES}
-                    >
-                      <ImagePlus className="h-4 w-4" />
-                    </Button>
+                  <TooltipTrigger
+                    className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md hover:bg-background disabled:opacity-50"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={uploadedImages.length >= MAX_IMAGES}
+                  >
+                    <ImagePlus className="h-4 w-4" />
                   </TooltipTrigger>
                   <TooltipContent>
                     上传图片 ({uploadedImages.length}/{MAX_IMAGES})

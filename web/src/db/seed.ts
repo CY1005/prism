@@ -1,10 +1,13 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
+import bcrypt from "bcryptjs";
 import {
+  users,
   projects,
   dimensionTypes,
   projectDimensionConfigs,
   projectTemplates,
+  projectMembers,
   nodes,
   dimensionRecords,
   versionRecords,
@@ -15,6 +18,20 @@ const db = drizzle(client);
 
 async function seed() {
   console.log("Seeding...");
+
+  // ─── 0. Default User ───────────────────────────────────
+  const passwordHash = await bcrypt.hash("admin123", 12);
+  const [defaultUser] = await db
+    .insert(users)
+    .values({
+      name: "CY",
+      email: "cy@prism.dev",
+      passwordHash,
+      role: "platform_admin",
+    })
+    .returning();
+
+  console.log(`  Created user: ${defaultUser.email} (password: admin123)`);
 
   // ─── 1. Dimension Types (12) ─────────────────────────
   const dims = await db
@@ -78,8 +95,16 @@ async function seed() {
       templateType: "product_analysis",
       hierarchyLabels: ["产品线", "模块", "功能项"],
       versionMode: "release",
+      createdBy: defaultUser.id,
     })
     .returning();
+
+  // ─── 3.1 Project Member (creator = admin) ─────────────
+  await db.insert(projectMembers).values({
+    projectId: project.id,
+    userId: defaultUser.id,
+    role: "admin",
+  });
 
   // ─── 4. Project Dimension Config (8 dims for product_analysis) ──
   const productDimKeys = ["description", "user_scenario", "tech_impl", "design_decision", "engineering_exp", "test_analysis", "requirement", "competitor"];
@@ -93,58 +118,65 @@ async function seed() {
   );
 
   // ─── 5. Node Tree ────────────────────────────────────
-  // Level 0: 产品线
   const [privateCloud] = await db.insert(nodes).values({
     projectId: project.id, name: "私有云", type: "folder", depth: 0, sortOrder: 0, path: "",
+    createdBy: defaultUser.id,
   }).returning();
 
   const [smartComputing] = await db.insert(nodes).values({
     projectId: project.id, name: "智算中心", type: "folder", depth: 0, sortOrder: 1, path: "",
+    createdBy: defaultUser.id,
   }).returning();
 
-  // Level 1: 模块
   const [inferenceService] = await db.insert(nodes).values({
     projectId: project.id, parentId: privateCloud.id, name: "推理服务", type: "folder", depth: 1, sortOrder: 0, path: privateCloud.id,
+    createdBy: defaultUser.id,
   }).returning();
 
   const [trainingService] = await db.insert(nodes).values({
     projectId: project.id, parentId: privateCloud.id, name: "训练服务", type: "folder", depth: 1, sortOrder: 1, path: privateCloud.id,
+    createdBy: defaultUser.id,
   }).returning();
 
-  // Level 2: 功能项
   const [createInference] = await db.insert(nodes).values({
     projectId: project.id, parentId: inferenceService.id, name: "创建推理服务", type: "file", depth: 2, sortOrder: 0,
     path: `${privateCloud.id}/${inferenceService.id}`,
+    createdBy: defaultUser.id,
   }).returning();
 
   await db.insert(nodes).values({
     projectId: project.id, parentId: inferenceService.id, name: "自动扩缩容", type: "file", depth: 2, sortOrder: 1,
     path: `${privateCloud.id}/${inferenceService.id}`,
+    createdBy: defaultUser.id,
   });
 
   await db.insert(nodes).values({
     projectId: project.id, parentId: inferenceService.id, name: "拼卡管理", type: "file", depth: 2, sortOrder: 2,
     path: `${privateCloud.id}/${inferenceService.id}`,
+    createdBy: defaultUser.id,
   });
 
   await db.insert(nodes).values({
     projectId: project.id, parentId: trainingService.id, name: "提交训练任务", type: "file", depth: 2, sortOrder: 0,
     path: `${privateCloud.id}/${trainingService.id}`,
+    createdBy: defaultUser.id,
   });
 
   await db.insert(nodes).values({
     projectId: project.id, parentId: trainingService.id, name: "训练监控", type: "file", depth: 2, sortOrder: 1,
     path: `${privateCloud.id}/${trainingService.id}`,
+    createdBy: defaultUser.id,
   });
 
-  // Smart computing nodes
   const [smartInference] = await db.insert(nodes).values({
     projectId: project.id, parentId: smartComputing.id, name: "推理服务", type: "folder", depth: 1, sortOrder: 0, path: smartComputing.id,
+    createdBy: defaultUser.id,
   }).returning();
 
   await db.insert(nodes).values({
     projectId: project.id, parentId: smartInference.id, name: "创建推理服务", type: "file", depth: 2, sortOrder: 0,
     path: `${smartComputing.id}/${smartInference.id}`,
+    createdBy: defaultUser.id,
   });
 
   // ─── 6. Dimension Records for "创建推理服务" ─────────
@@ -155,6 +187,7 @@ async function seed() {
       content: {
         text: "支持按需选择 CPU、GPU 物理卡、GPU 虚拟卡三类资源配置任务。用户可根据实例规格卡上的资源量提示直接选择，也可由运维管理员在规格管理中自定义配置。",
       },
+      createdBy: defaultUser.id,
     },
     {
       nodeId: createInference.id,
@@ -165,6 +198,7 @@ async function seed() {
           { role: "运维管理员", scenario: "配置默认资源配额和实例规格", techStack: ["平台管理控制台"] },
         ],
       },
+      createdBy: defaultUser.id,
     },
     {
       nodeId: createInference.id,
@@ -176,6 +210,7 @@ async function seed() {
         ],
         referenceStandards: "Volcano (CNCF孵化·华为主导) · KServe (K8s模型serving标准)",
       },
+      createdBy: defaultUser.id,
     },
     {
       nodeId: createInference.id,
@@ -186,6 +221,7 @@ async function seed() {
         alternatives: "物理卡和虚拟卡分成两套模型（否决原因：重复逻辑太多）",
         consequences: "API 更简洁，但需要按类型做差异化校验",
       },
+      createdBy: defaultUser.id,
     },
     {
       nodeId: createInference.id,
@@ -195,15 +231,25 @@ async function seed() {
         text: "拼卡后推理延迟反而增大。根因：跨 NUMA 节点的显存访问。修复：调度器增加 NUMA 拓扑感知。",
         tags: ["踩坑", "GPU", "性能"],
       },
+      createdBy: defaultUser.id,
     },
   ]);
 
   // ─── 7. Version Records ──────────────────────────────
+  const [currentVersion] = await db.insert(versionRecords).values([
+    { nodeId: createInference.id, versionLabel: "v3.9.3", summary: "新增拼卡能力，支持多卡虚拟化共享", details: "本版本重点优化了多GPU场景下的资源利用效率，支持将单张物理GPU虚拟化为多个vGPU实例。" },
+  ]).returning();
+
   await db.insert(versionRecords).values([
-    { nodeId: createInference.id, versionLabel: "v3.9.3", summary: "新增拼卡能力，支持多卡虚拟化共享", details: "本版本重点优化了多GPU场景下的资源利用效率，支持将单张物理GPU虚拟化为多个vGPU实例。", isCurrent: true },
     { nodeId: createInference.id, versionLabel: "v3.7", summary: "新增自动扩缩容，支持定时策略", details: "引入基于HPA的自动扩缩容能力。" },
     { nodeId: createInference.id, versionLabel: "v1.6", summary: "首次上线：基础 GPU 类型选择", details: "产品首个正式版本，支持NVIDIA GPU的基础调度能力。" },
   ]);
+
+  // Set current version via nodes.currentVersionId
+  await db.update(nodes).set({ currentVersionId: currentVersion.id }).where(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await import("drizzle-orm")).eq(nodes.id, createInference.id) as any
+  );
 
   console.log("Seed complete!");
   process.exit(0);
