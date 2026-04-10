@@ -3,9 +3,23 @@ from sqlalchemy.orm import Session
 
 from api.db import get_db
 from api.schemas.project import ProjectStats, ProjectTreeOverview
+from api.schemas.project_list import ProjectListResponse, ProjectCreateRequest, ProjectCreateResponse
 from api.services.project_stats import get_project_stats, get_project_tree_overview
+from api.services.project_crud import list_projects, create_project
 
 router = APIRouter()
+
+
+@router.get("/", response_model=ProjectListResponse)
+def get_projects(db: Session = Depends(get_db)):
+    """List all projects with summary stats."""
+    return list_projects(db)
+
+
+@router.post("/", response_model=ProjectCreateResponse, status_code=201)
+def create_new_project(req: ProjectCreateRequest, db: Session = Depends(get_db)):
+    """Create a new project."""
+    return create_project(db, req.name, req.description, req.template_type)
 
 
 @router.get("/{project_id}/stats", response_model=ProjectStats)

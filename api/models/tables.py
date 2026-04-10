@@ -53,11 +53,8 @@ class Project(Base):
     name = Column(Text, nullable=False)
     description = Column(Text)
     template_type = Column(Text, nullable=False, default="custom")
-    hierarchy_labels = Column(JSONB, nullable=False, default=["层级1", "层级2", "层级3"])
-    version_mode = Column(Text, nullable=False, default="release")
-    ai_provider = Column(Text, default="local")
-    ai_api_key_enc = Column(Text)
-    # created_by may not exist yet (migration pending)
+    # hierarchy_labels, version_mode, ai_provider, ai_api_key_enc, created_by
+    # may not exist yet (migration pending)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 
