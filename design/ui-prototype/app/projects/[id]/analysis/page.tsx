@@ -13,11 +13,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Scale,
-  TestTube,
-  Upload,
-  ImagePlus,
-  FileText,
-  X,
+  Users,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -27,14 +23,6 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -43,12 +31,62 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { detailStrings } from "@/lib/project-detail-data"
-import { analysisResultData } from "@/lib/analysis-data"
+
+// Mock analysis result data
+const mockAnalysisResult = {
+  impactAnalysis: {
+    direct: [
+      { path: "推理服务 > 路由管理", reason: "需要新增路由规则配置" },
+      { path: "推理服务 > 模型调度", reason: "调度策略需要适配新路由" },
+    ],
+    indirect: [
+      { path: "推理服务 > 监控告警", reason: "需要新增路由相关指标" },
+      { path: "API网关 > 流量控制", reason: "可能受路由变更影响" },
+    ],
+  },
+  completenessCheck: [
+    { text: "功能边界描述清晰", passed: true },
+    { text: "异常场景已覆盖", passed: true },
+    { text: "性能指标未明确", passed: false },
+    { text: "缺少回滚方案", passed: false },
+  ],
+  reasonabilityEval: [
+    { text: "需求与现有架构兼容", passed: true },
+    { text: "实现复杂度可控", passed: true },
+    { text: "建议参考竞品 A 的路由热更新方案", passed: "warning" as const },
+  ],
+  userPerspective: [
+    {
+      role: "运维人员",
+      concerns: ["路由变更是否支持热更新？", "变更后如何快速回滚？"],
+    },
+    {
+      role: "开发人员",
+      concerns: ["新路由规则的 SDK 调用方式？", "是否兼容现有代码？"],
+    },
+    {
+      role: "产品经理",
+      concerns: ["用户感知的切换延迟？", "是否需要用户手动配置？"],
+    },
+  ],
+}
 
 export default function AnalysisPage() {
   const params = useParams()
   const projectId = params.id as string
-  const [inputType, setInputType] = useState<"text" | "file" | "image">("text")
+  const [requirementText, setRequirementText] = useState("")
+  const [isAnalyzed, setIsAnalyzed] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+
+  const handleAnalyze = () => {
+    if (!requirementText.trim()) return
+    setIsAnalyzing(true)
+    // Simulate API call
+    setTimeout(() => {
+      setIsAnalyzing(false)
+      setIsAnalyzed(true)
+    }, 1500)
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -104,7 +142,7 @@ export default function AnalysisPage() {
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbPage>需求工作台</BreadcrumbPage>
+              <BreadcrumbPage>需求分析工作台</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -131,209 +169,141 @@ export default function AnalysisPage() {
         </Link>
       </div>
 
-      {/* Main Content */}
-      <ScrollArea className="flex-1">
-        <div className="max-w-4xl mx-auto p-6">
-          {/* Input Card */}
-          <Card className="border-border/60 shadow-sm p-6">
-            <h2 className="text-xl font-semibold">需求工作台</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              输入需求 → AI 分析影响范围与合理性 → 生成测试点 → 一键录入
-            </p>
-
-            {/* Input Type Tabs */}
-            <div className="flex gap-1 mt-4 p-1 bg-muted rounded-lg w-fit">
-              <button
-                onClick={() => setInputType("text")}
-                className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-                  inputType === "text"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                文字描述
-              </button>
-              <button
-                onClick={() => setInputType("file")}
-                className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-                  inputType === "file"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                上传文件
-              </button>
-              <button
-                onClick={() => setInputType("image")}
-                className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
-                  inputType === "image"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                上传图片
-              </button>
-            </div>
-
-            {/* Input Content Area */}
-            <div className="mt-4">
-              {inputType === "text" && (
-                <Textarea
-                  className="min-h-[128px]"
-                  placeholder="输入需求描述，支持 Markdown 格式..."
-                />
-              )}
-
-              {inputType === "file" && (
-                <div className="space-y-3">
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-muted-foreground/50 transition-colors">
-                    <Upload className="h-10 w-10 text-muted-foreground mb-3" />
-                    <p className="text-sm text-foreground">拖拽文件到此处，或点击选择文件</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      支持 .doc .docx .pdf .txt .md 格式，单文件最大 10MB
-                    </p>
-                  </div>
-                  {/* Uploaded File Example */}
-                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">推理服务v3.9.3需求文档.docx</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">2.3MB</span>
-                    <button className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0">
-                      <X className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {inputType === "image" && (
-                <div className="space-y-3">
-                  <div className="border-2 border-dashed border-border rounded-lg p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-muted-foreground/50 transition-colors">
-                    <ImagePlus className="h-10 w-10 text-muted-foreground mb-3" />
-                    <p className="text-sm text-foreground">拖拽图片到此处，或点击选择图片</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      支持 .png .jpg .jpeg 格式，支持截图粘贴，单张最大 5MB
-                    </p>
-                  </div>
-                  {/* Uploaded Image Example */}
-                  <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    <div className="w-20 h-20 bg-muted rounded-md flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">需求原型截图.png</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground flex-shrink-0">856KB</span>
-                    <button className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0">
-                      <X className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 mt-4">
-              <Button>开始分析</Button>
-              <Button variant="outline">生成测试点</Button>
-            </div>
-          </Card>
-
-          {/* Results */}
-          <div className="space-y-4 mt-6">
-            {/* Impact Analysis */}
-            <Card className="border-border/60 shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Badge variant="outline" className="rounded-full text-xs px-2">Step 1</Badge>
-                <AlertTriangle className="h-5 w-5 text-orange-500" />
-                <h3 className="font-medium">{analysisResultData.impactAnalysis.title}</h3>
-                <Badge variant="destructive">涉及 {analysisResultData.impactAnalysis.affectedModulesCount} 个模块</Badge>
-              </div>
-              <div className="space-y-2">
-                {analysisResultData.impactAnalysis.items.map((item, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${item.type === "direct" ? "bg-red-500" : "bg-yellow-500"}`} />
-                    <span className="text-sm">{item.path}</span>
-                    <Badge className={item.type === "direct" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"}>
-                      {item.type === "direct" ? "直接影响" : "间接影响"}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Completeness Check */}
-            <Card className="border-border/60 shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Badge variant="outline" className="rounded-full text-xs px-2">Step 2</Badge>
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                <h3 className="font-medium">{analysisResultData.completenessCheck.title}</h3>
-              </div>
-              <div className="space-y-2 text-sm">
-                {analysisResultData.completenessCheck.items.map((item, index) => (
-                  <p key={index}>
-                    <span className={item.passed ? "text-green-500" : "text-red-500"}>
-                      {item.passed ? "\u2705" : "\u274C"}
-                    </span>{" "}
-                    {item.text}
-                  </p>
-                ))}
-              </div>
-            </Card>
-
-            {/* Reasonability Evaluation */}
-            <Card className="border-border/60 shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Badge variant="outline" className="rounded-full text-xs px-2">Step 3</Badge>
-                <Scale className="h-5 w-5 text-yellow-500" />
-                <h3 className="font-medium">{analysisResultData.reasonabilityEval.title}</h3>
-                <Badge className="bg-yellow-50 text-yellow-700">{analysisResultData.reasonabilityEval.status}</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">{analysisResultData.reasonabilityEval.description}</p>
-            </Card>
-
-            {/* Test Points */}
-            <Card className="border-border/60 shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Badge variant="outline" className="rounded-full text-xs px-2">Step 4</Badge>
-                <TestTube className="h-5 w-5 text-primary" />
-                <h3 className="font-medium">{analysisResultData.testPoints.title}</h3>
-                <Badge variant="secondary">{analysisResultData.testPoints.count} 条</Badge>
-              </div>
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-12">#</TableHead>
-                      <TableHead>测试点</TableHead>
-                      <TableHead className="w-20">优先级</TableHead>
-                      <TableHead className="w-28">关联功能</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {analysisResultData.testPoints.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.id}</TableCell>
-                        <TableCell>{item.description}</TableCell>
-                        <TableCell>
-                          <Badge className={item.priority === "P0" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"}>
-                            {item.priority}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{item.relatedFeature}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <p className="text-sm text-primary cursor-pointer mt-2">
-                查看全部 {analysisResultData.testPoints.count} 条 →
-              </p>
-              <Button variant="outline" className="mt-3">
-                一键录入到测试分析
-              </Button>
-            </Card>
-          </div>
+      {/* Main Content - 50/50 Split */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Side - Input Area */}
+        <div className="w-1/2 border-r border-border p-6 flex flex-col">
+          <h2 className="text-lg font-semibold mb-2">需求描述</h2>
+          <Textarea
+            className="flex-1 min-h-[300px] resize-none"
+            placeholder="输入需求描述，AI 将分析影响范围和完整性..."
+            value={requirementText}
+            onChange={(e) => setRequirementText(e.target.value)}
+          />
+          <Button 
+            className="mt-4 w-fit" 
+            onClick={handleAnalyze}
+            disabled={!requirementText.trim() || isAnalyzing}
+          >
+            {isAnalyzing ? "分析中..." : "AI 分析"}
+          </Button>
         </div>
-      </ScrollArea>
+
+        {/* Right Side - Analysis Results */}
+        <div className="w-1/2 flex flex-col">
+          <ScrollArea className="flex-1">
+            <div className="p-6 space-y-4">
+              {!isAnalyzed ? (
+                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                  <p className="text-sm">输入需求后点击「AI 分析」查看结果</p>
+                </div>
+              ) : (
+                <>
+                  {/* Impact Analysis */}
+                  <Card className="border-border/60 shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <AlertTriangle className="h-5 w-5 text-orange-500" />
+                      <h3 className="font-medium">影响范围</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-2">直接影响</p>
+                        <div className="space-y-2">
+                          {mockAnalysisResult.impactAnalysis.direct.map((item, index) => (
+                            <div key={index} className="flex items-start gap-2">
+                              <Badge className="bg-primary/10 text-primary hover:bg-primary/10 shrink-0">直接</Badge>
+                              <div>
+                                <span className="text-sm font-medium">{item.path}</span>
+                                <p className="text-xs text-muted-foreground">{item.reason}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-2">间接影响</p>
+                        <div className="space-y-2">
+                          {mockAnalysisResult.impactAnalysis.indirect.map((item, index) => (
+                            <div key={index} className="flex items-start gap-2">
+                              <Badge variant="secondary" className="shrink-0">间接</Badge>
+                              <div>
+                                <span className="text-sm font-medium">{item.path}</span>
+                                <p className="text-xs text-muted-foreground">{item.reason}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Completeness Check */}
+                  <Card className="border-border/60 shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                      <h3 className="font-medium">完整性评估</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {mockAnalysisResult.completenessCheck.map((item, index) => (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                          <span>{item.passed ? "\u2705" : "\u274C"}</span>
+                          <span className={item.passed ? "text-foreground" : "text-muted-foreground"}>{item.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {/* Reasonability Evaluation */}
+                  <Card className="border-border/60 shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Scale className="h-5 w-5 text-yellow-500" />
+                      <h3 className="font-medium">合理性评估</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {mockAnalysisResult.reasonabilityEval.map((item, index) => (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                          <span>{item.passed === true ? "\u2705" : item.passed === "warning" ? "\u26A0\uFE0F" : "\u274C"}</span>
+                          <span className="text-foreground">{item.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {/* User Perspective */}
+                  <Card className="border-border/60 shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Users className="h-5 w-5 text-primary" />
+                      <h3 className="font-medium">用户视角评估</h3>
+                    </div>
+                    <div className="space-y-4">
+                      {mockAnalysisResult.userPerspective.map((roleData, index) => (
+                        <div key={index}>
+                          <p className="text-sm font-medium mb-2">{roleData.role}</p>
+                          <ul className="space-y-1 pl-4">
+                            {roleData.concerns.map((concern, cIndex) => (
+                              <li key={cIndex} className="text-sm text-muted-foreground list-disc">
+                                {concern}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </>
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Bottom Action Bar */}
+          {isAnalyzed && (
+            <div className="border-t border-border p-4 flex items-center justify-between bg-card">
+              <Button variant="outline">保存分析结果</Button>
+              <Button>生成测试点</Button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

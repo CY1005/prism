@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { Search, Bell, ChevronRight, LogOut, Settings, Shield } from "lucide-react"
+import { useState } from "react"
+import { Search, Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +31,7 @@ function getStatusColor(percent: number) {
 export default function ProjectOverviewPage() {
   const params = useParams()
   const projectId = params.id as string
+  const [isEmptyProject, setIsEmptyProject] = useState(projectId === "3")
 
   // Use different data based on project ID
   const isOpenClaw = projectId === "2"
@@ -119,59 +121,93 @@ export default function ProjectOverviewPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 px-6 py-4">
-        <Card className="border-border/60 p-4 shadow-sm">
-          <span className="text-2xl font-bold text-foreground">{stats.line1}</span>
-          <p className="text-sm text-muted-foreground">{strings.productLine}</p>
-        </Card>
-        <Card className="border-border/60 p-4 shadow-sm">
-          <span className="text-2xl font-bold text-foreground">{stats.line2}</span>
-          <p className="text-sm text-muted-foreground">{strings.modules}</p>
-        </Card>
-        <Card className="border-border/60 p-4 shadow-sm">
-          <span className="text-2xl font-bold text-foreground">{stats.line3}</span>
-          <p className="text-sm text-muted-foreground">{strings.features}</p>
-        </Card>
-        <Card className="border-border/60 p-4 shadow-sm">
-          <span className="text-2xl font-bold text-foreground">{stats.line4}</span>
-          <p className="text-sm text-muted-foreground">{strings.avgCompletion}</p>
-          <Progress value={isOpenClaw ? 45 : 58} className="mt-2 h-2" />
-        </Card>
+      <div className="flex items-center gap-4 px-6 py-4">
+        <div className="grid grid-cols-4 gap-4 flex-1">
+          <Card className="border-border/60 p-4 shadow-sm">
+            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0" : stats.line1}</span>
+            <p className="text-sm text-muted-foreground">{strings.productLine}</p>
+          </Card>
+          <Card className="border-border/60 p-4 shadow-sm">
+            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0" : stats.line2}</span>
+            <p className="text-sm text-muted-foreground">{strings.modules}</p>
+          </Card>
+          <Card className="border-border/60 p-4 shadow-sm">
+            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0" : stats.line3}</span>
+            <p className="text-sm text-muted-foreground">{strings.features}</p>
+          </Card>
+          <Card className="border-border/60 p-4 shadow-sm">
+            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0%" : stats.line4}</span>
+            <p className="text-sm text-muted-foreground">{strings.avgCompletion}</p>
+            <Progress value={isEmptyProject ? 0 : (isOpenClaw ? 45 : 58)} className="mt-2 h-2" />
+          </Card>
+        </div>
+        <Button variant="outline" className="h-auto py-3 px-4 flex items-center gap-2" asChild>
+          <Link href={`/projects/${projectId}/import`}>
+            <Upload className="h-4 w-4" />
+            <span>导入数据</span>
+          </Link>
+        </Button>
       </div>
 
       <div className="flex flex-1 gap-6 px-6 pb-6">
-        <Card className="flex-1 border-border/60 p-6 shadow-sm">
-          <div className="flex gap-6">
-            {layers.map((line) => (
-              <div key={line.name} className="flex flex-col items-center">
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-3">
-                  <span
-                    className={`h-2 w-2 rounded-full ${getStatusColor(line.completion)}`}
-                  />
-                  <span className="text-sm font-medium text-foreground">
-                    {line.name}
-                  </span>
-                </div>
-                <div className="h-4 w-px bg-border" />
-                <div className="flex flex-col gap-2">
-                  {line.modules.map((module, index) => (
-                    <div key={module.name} className="flex flex-col items-center">
-                      {index > 0 && <div className="h-2 w-px bg-border" />}
-                      <Link href={isOpenClaw ? "/openclaw" : "/"} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${getStatusColor(module.completion)}`}
-                        />
-                        <span className="text-xs text-foreground">
-                          {module.name}
-                        </span>
-                      </Link>
-                    </div>
-                  ))}
-                </div>
+        {isEmptyProject ? (
+          <Card className="flex-1 border-border/60 p-6 shadow-sm flex flex-col items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center text-center max-w-md">
+              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-6">
+                <FolderUp className="h-8 w-8 text-muted-foreground" />
               </div>
-            ))}
-          </div>
-        </Card>
+              <h2 className="text-xl font-semibold text-foreground mb-2">从知识库开始</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                上传已有的知识库文件，AI 帮你自动整理成结构化知识
+              </p>
+              <div className="flex items-center gap-3">
+                <Button asChild>
+                  <Link href={`/projects/${projectId}/import`}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    上传知识库（zip）
+                  </Link>
+                </Button>
+                <Button variant="outline" onClick={() => setIsEmptyProject(false)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  手动创建模块
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <Card className="flex-1 border-border/60 p-6 shadow-sm">
+            <div className="flex gap-6">
+              {layers.map((line) => (
+                <div key={line.name} className="flex flex-col items-center">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-3">
+                    <span
+                      className={`h-2 w-2 rounded-full ${getStatusColor(line.completion)}`}
+                    />
+                    <span className="text-sm font-medium text-foreground">
+                      {line.name}
+                    </span>
+                  </div>
+                  <div className="h-4 w-px bg-border" />
+                  <div className="flex flex-col gap-2">
+                    {line.modules.map((module, index) => (
+                      <div key={module.name} className="flex flex-col items-center">
+                        {index > 0 && <div className="h-2 w-px bg-border" />}
+                        <Link href={isOpenClaw ? "/openclaw" : "/"} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer">
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${getStatusColor(module.completion)}`}
+                          />
+                          <span className="text-xs text-foreground">
+                            {module.name}
+                          </span>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <Card className="w-[280px] border-border/60 p-4 shadow-sm">
           <h3 className="mb-4 font-medium text-foreground">{strings.recentUpdates}</h3>
