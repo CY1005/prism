@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useEffect } from "react"
-import { Search, Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2 } from "lucide-react"
+import { Search, Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate } from "lucide-react"
+import { ImportCSVModal } from "@/components/import-csv-modal"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +23,7 @@ import {
 import { detailStrings, recentUpdates } from "@/lib/project-detail-data"
 import { openclawStrings, openclawRecentUpdates } from "@/lib/openclaw-data"
 import { getProjectStats, getProjectTreeOverview, type ProjectStats, type TreeNodeOverview } from "@/services/project-stats"
+import { useProjectRole } from "@/contexts/project-role-context"
 
 function getStatusColor(percent: number) {
   if (percent >= 80) return "bg-green-500"
@@ -44,7 +46,9 @@ function treeToLayers(tree: TreeNodeOverview[]) {
 export default function ProjectOverviewPage() {
   const params = useParams()
   const projectId = params.projectId as string
+  const { isViewer } = useProjectRole()
   const [isEmptyProject, setIsEmptyProject] = useState(projectId === "3")
+  const [csvModalOpen, setCsvModalOpen] = useState(false)
   const [realStats, setRealStats] = useState<ProjectStats | null>(null)
   const [realTree, setRealTree] = useState<TreeNodeOverview[] | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -211,35 +215,101 @@ export default function ProjectOverviewPage() {
             </>
           )}
         </div>
-        <Link href={`/projects/${projectId}/import`} className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium hover:bg-accent transition-colors">
-          <Upload className="h-4 w-4" />
-          <span>导入数据</span>
-        </Link>
+        {isViewer ? (
+          <span
+            title="查看者无编辑权限"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium opacity-50 cursor-not-allowed"
+          >
+            <Upload className="h-4 w-4" />
+            <span>导入数据</span>
+          </span>
+        ) : (
+          <Link href={`/projects/${projectId}/import`} className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium hover:bg-accent transition-colors">
+            <Upload className="h-4 w-4" />
+            <span>导入数据</span>
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-1 gap-6 px-6 pb-6">
-        {isEmptyProject ? (
-          <Card className="flex-1 border-border/60 p-6 shadow-sm flex flex-col items-center justify-center min-h-[400px]">
-            <div className="flex flex-col items-center text-center max-w-md">
-              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-6">
-                <FolderUp className="h-8 w-8 text-muted-foreground" />
+        {isEmptyProject && !treeLoading && (realTree === null || realTree.length === 0) ? (
+          <>
+            <ImportCSVModal
+              projectId={projectId}
+              open={csvModalOpen}
+              onOpenChange={(open) => {
+                setCsvModalOpen(open)
+                // 导入完成后刷新树数据
+                if (!open) {
+                  setTreeLoading(true)
+                  getProjectTreeOverview(projectId).then((r) => {
+                    setTreeLoading(false)
+                    if (r.ok) {
+                      setRealTree(r.data.tree)
+                      if (r.data.tree.length > 0) setIsEmptyProject(false)
+                    }
+                  })
+                }
+              }}
+            />
+            <Card className="flex-1 border-border/60 p-6 shadow-sm flex flex-col items-center justify-center min-h-[400px]">
+              <div className="flex flex-col items-center text-center max-w-lg">
+                <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-6">
+                  <FolderUp className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h2 className="text-xl font-semibold text-foreground mb-2">开始构建你的知识库</h2>
+                <p className="text-sm text-muted-foreground mb-8">
+                  选择一种方式初始化项目结构，快速搭建你的知识体系
+                </p>
+                <div className="grid grid-cols-3 gap-4 w-full">
+                  {/* 手动创建 */}
+                  <Link
+                    href={`/projects/${projectId}/product-lines/private-cloud`}
+                    className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-5 text-center hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                  >
+                    <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                      <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">手动创建</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">逐步添加节点</p>
+                    </div>
+                  </Link>
+
+                  {/* CSV 导入 */}
+                  <button
+                    onClick={() => !isViewer && setCsvModalOpen(true)}
+                    disabled={isViewer}
+                    title={isViewer ? "查看者无编辑权限" : undefined}
+                    className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-5 text-center hover:border-primary/50 hover:bg-primary/5 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                      <FileUp className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">CSV 导入</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">批量导入结构</p>
+                    </div>
+                  </button>
+
+                  {/* 模板初始化 */}
+                  <button
+                    disabled
+                    title="即将推出"
+                    className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-5 text-center opacity-50 cursor-not-allowed"
+                  >
+                    <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                      <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">模板初始化</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">即将推出</p>
+                    </div>
+                  </button>
+                </div>
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">从知识库开始</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                上传已有的知识库文件，AI 帮你自动整理成结构化知识
-              </p>
-              <div className="flex items-center gap-3">
-                <Link href={`/projects/${projectId}/import`} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-                  <Upload className="h-4 w-4" />
-                  上传知识库（zip）
-                </Link>
-                <Button variant="outline" onClick={() => setIsEmptyProject(false)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  手动创建模块
-                </Button>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          </>
         ) : (
           <Card className="flex-1 border-border/60 p-6 shadow-sm">
             {treeLoading ? (

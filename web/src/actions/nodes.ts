@@ -562,6 +562,174 @@ export async function getModuleRelations(projectId: string): Promise<{
   };
 }
 
+export async function importNodesFromCSV(
+  projectId: string,
+  csvContent: string,
+): Promise<ActionResult<{ imported: number; errors: string[] }>> {
+  try {
+    const user = await requireAuth();
+    await checkProjectAccess(user.id, projectId, "editor");
+
+    // ── 解析 CSV ─────────────────────────────────────────
+    const lines = csvContent.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length < 2) {
+      return actionSuccess({ imported: 0, errors: ["CSV 内容为空或缺少数据行"] });
+    }
+
+    // 解析表头（支持带/不带 BOM）
+    const rawHeader = lines[0].replace(/^\uFEFF/, "");
+    const headers = rawHeader.split(",").map((h) => h.trim());
+
+    const colIndex = {
+      name: headers.indexOf("名称"),
+      type: headers.indexOf("类型"),
+      parent: headers.indexOf("父节点名称"),
+      desc: headers.indexOf("描述"),
+    };
+
+    if (colIndex.name === -1) {
+      return actionError(new AppError("CSV 缺少必填列：名称", "blocking", "VALIDATION_ERROR", 400));
+    }
+
+    // ── 拉取项目已有节点 ──────────────────────────────────
+    const existingNodes = await db
+      .select()
+      .from(nodes)
+      .where(eq(nodes.projectId, projectId));
+
+    // name -> node 映射（用于父节点查找，key = parentId|name 或 root|name）
+    // 使用 id 作为最终引用
+    const nameToNode = new Map<string, (typeof existingNodes)[number]>();
+    for (const n of existingNodes) {
+      nameToNode.set(n.name, n);
+    }
+
+    // 本批次已插入的节点（name -> 临时对象），用于后续行的父节点引用
+    interface PendingNode {
+      id: string;
+      name: string;
+      parentId: string | null;
+      depth: number;
+      path: string;
+      sortOrder: number;
+      type: "folder" | "file";
+    }
+    const importedByName = new Map<string, PendingNode>();
+
+    const errors: string[] = [];
+    let importedCount = 0;
+
+    // 同级名称去重：key = `${parentId ?? "root"}::${name}`
+    const siblingNameSet = new Set<string>();
+    for (const n of existingNodes) {
+      siblingNameSet.add(`${n.parentId ?? "root"}::${n.name}`);
+    }
+
+    const dataLines = lines.slice(1);
+
+    for (let i = 0; i < dataLines.length; i++) {
+      const rowNum = i + 2; // 1-based, header is row 1
+      const cols = dataLines[i].split(",").map((c) => c.trim());
+
+      const rawName = colIndex.name >= 0 ? (cols[colIndex.name] ?? "").trim() : "";
+      const rawType = colIndex.type >= 0 ? (cols[colIndex.type] ?? "").trim() : "";
+      const rawParent = colIndex.parent >= 0 ? (cols[colIndex.parent] ?? "").trim() : "";
+
+      // 名称必填
+      if (!rawName) {
+        errors.push(`第 ${rowNum} 行：名称为空，已跳过`);
+        continue;
+      }
+
+      // 类型校验，默认 file
+      let nodeType: "folder" | "file" = "file";
+      if (rawType === "folder" || rawType === "文件夹") {
+        nodeType = "folder";
+      } else if (rawType === "file" || rawType === "文件" || rawType === "") {
+        nodeType = "file";
+      } else {
+        errors.push(`第 ${rowNum} 行："${rawName}" 类型 "${rawType}" 无效，已按 file 处理`);
+      }
+
+      // 父节点解析
+      let parentId: string | null = null;
+      let depth = 0;
+      let path = "";
+
+      if (rawParent) {
+        // 先找本批次已导入的，再找库中已有的
+        const fromImported = importedByName.get(rawParent);
+        const fromExisting = nameToNode.get(rawParent);
+
+        if (fromImported) {
+          parentId = fromImported.id;
+          depth = fromImported.depth + 1;
+          path = fromImported.path ? `${fromImported.path}/${fromImported.id}` : fromImported.id;
+        } else if (fromExisting) {
+          parentId = fromExisting.id;
+          depth = fromExisting.depth + 1;
+          path = fromExisting.path
+            ? `${fromExisting.path}/${fromExisting.id}`
+            : fromExisting.id;
+        } else {
+          errors.push(`第 ${rowNum} 行："${rawName}" 的父节点 "${rawParent}" 不存在，已跳过`);
+          continue;
+        }
+      }
+
+      // 同级名称重复检查
+      const siblingKey = `${parentId ?? "root"}::${rawName}`;
+      if (siblingNameSet.has(siblingKey)) {
+        errors.push(`第 ${rowNum} 行："${rawName}" 在同级下已存在，已跳过`);
+        continue;
+      }
+
+      // 计算 sortOrder
+      const siblingsCount = [...existingNodes, ...importedByName.values()].filter(
+        (n) => (n.parentId ?? null) === parentId,
+      ).length;
+
+      // 插入数据库
+      const [newNode] = await db
+        .insert(nodes)
+        .values({
+          projectId,
+          parentId,
+          name: rawName,
+          type: nodeType,
+          depth,
+          sortOrder: siblingsCount,
+          path,
+          createdBy: user.id,
+        })
+        .returning();
+
+      // 记录已导入
+      importedByName.set(rawName, {
+        id: newNode.id,
+        name: rawName,
+        parentId,
+        depth,
+        path,
+        sortOrder: siblingsCount,
+        type: nodeType,
+      });
+      siblingNameSet.add(siblingKey);
+      // 也加入 nameToNode 以供后续行引用
+      nameToNode.set(rawName, newNode);
+
+      importedCount++;
+    }
+
+    logger.action("node.importCSV", user.id, { projectId, importedCount });
+    revalidatePath(`/projects/${projectId}`);
+
+    return actionSuccess({ imported: importedCount, errors });
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
 export async function updateNodeSortOrder(
   nodeId: string,
   newSortOrder: number,
