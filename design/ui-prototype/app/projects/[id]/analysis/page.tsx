@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useState } from "react"
+import { useState, useRef, useCallback } from "react"
 import {
   Search,
   Bell,
@@ -14,6 +14,11 @@ import {
   CheckCircle,
   Scale,
   Users,
+  Type,
+  FileText,
+  ImagePlus,
+  X,
+  Loader2,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,6 +36,25 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { detailStrings } from "@/lib/project-detail-data"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+
+// File upload types
+interface UploadedFile {
+  id: string
+  file: File
+  name: string
+  size: string
+  type: "document" | "image"
+  status: "uploading" | "completed"
+  previewUrl?: string
+}
+
+// Format file size
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B"
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+}
 
 // Mock analysis result data
 const mockAnalysisResult = {
@@ -77,9 +101,110 @@ export default function AnalysisPage() {
   const [requirementText, setRequirementText] = useState("")
   const [isAnalyzed, setIsAnalyzed] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadedImages, setUploadedImages] = useState<UploadedFile[]>([])
+  const [isDragOver, setIsDragOver] = useState(false)
+  
+  const documentInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  const MAX_DOCUMENTS = 3
+  const MAX_IMAGES = 5
+
+  // Check if there's any input content
+  const hasContent = requirementText.trim() || uploadedFiles.length > 0 || uploadedImages.length > 0
+
+  // Handle file upload
+  const handleFileUpload = useCallback((files: FileList | null, type: "document" | "image") => {
+    if (!files) return
+
+    const currentCount = type === "document" ? uploadedFiles.length : uploadedImages.length
+    const maxCount = type === "document" ? MAX_DOCUMENTS : MAX_IMAGES
+    const allowedExtensions = type === "document" 
+      ? [".pdf", ".doc", ".docx", ".txt"]
+      : [".png", ".jpg", ".jpeg"]
+
+    const filesToAdd = Array.from(files).slice(0, maxCount - currentCount)
+
+    filesToAdd.forEach((file) => {
+      const extension = "." + file.name.split(".").pop()?.toLowerCase()
+      if (!allowedExtensions.includes(extension)) return
+
+      const newFile: UploadedFile = {
+        id: Math.random().toString(36).substr(2, 9),
+        file,
+        name: file.name,
+        size: formatFileSize(file.size),
+        type,
+        status: "uploading",
+        previewUrl: type === "image" ? URL.createObjectURL(file) : undefined,
+      }
+
+      if (type === "document") {
+        setUploadedFiles((prev) => [...prev, newFile])
+      } else {
+        setUploadedImages((prev) => [...prev, newFile])
+      }
+
+      // Simulate upload completion
+      setTimeout(() => {
+        if (type === "document") {
+          setUploadedFiles((prev) =>
+            prev.map((f) => (f.id === newFile.id ? { ...f, status: "completed" } : f))
+          )
+        } else {
+          setUploadedImages((prev) =>
+            prev.map((f) => (f.id === newFile.id ? { ...f, status: "completed" } : f))
+          )
+        }
+      }, 800 + Math.random() * 500)
+    })
+  }, [uploadedFiles.length, uploadedImages.length])
+
+  // Handle file removal
+  const handleRemoveFile = (id: string, type: "document" | "image") => {
+    if (type === "document") {
+      setUploadedFiles((prev) => prev.filter((f) => f.id !== id))
+    } else {
+      const file = uploadedImages.find((f) => f.id === id)
+      if (file?.previewUrl) {
+        URL.revokeObjectURL(file.previewUrl)
+      }
+      setUploadedImages((prev) => prev.filter((f) => f.id !== id))
+    }
+  }
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+
+    const files = e.dataTransfer.files
+    if (!files.length) return
+
+    // Determine file type based on extension
+    const firstFile = files[0]
+    const extension = "." + firstFile.name.split(".").pop()?.toLowerCase()
+    
+    if ([".pdf", ".doc", ".docx", ".txt"].includes(extension)) {
+      handleFileUpload(files, "document")
+    } else if ([".png", ".jpg", ".jpeg"].includes(extension)) {
+      handleFileUpload(files, "image")
+    }
+  }, [handleFileUpload])
 
   const handleAnalyze = () => {
-    if (!requirementText.trim()) return
+    if (!hasContent) return
     setIsAnalyzing(true)
     // Simulate API call
     setTimeout(() => {
@@ -172,18 +297,150 @@ export default function AnalysisPage() {
       {/* Main Content - 50/50 Split */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Side - Input Area */}
-        <div className="w-1/2 border-r border-border p-6 flex flex-col">
-          <h2 className="text-lg font-semibold mb-2">需求描述</h2>
+        <div 
+          className={`w-1/2 border-r border-border p-6 flex flex-col ${
+            isDragOver ? "border-dashed border-2 border-primary/50 bg-primary/5" : ""
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">需求描述</h2>
+            <TooltipProvider>
+              <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 bg-background shadow-sm"
+                    >
+                      <Type className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>文字输入</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 hover:bg-background"
+                      onClick={() => documentInputRef.current?.click()}
+                      disabled={uploadedFiles.length >= MAX_DOCUMENTS}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    上传文档 ({uploadedFiles.length}/{MAX_DOCUMENTS})
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 hover:bg-background"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={uploadedImages.length >= MAX_IMAGES}
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    上传图片 ({uploadedImages.length}/{MAX_IMAGES})
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
+          </div>
+
+          {/* Hidden file inputs */}
+          <input
+            ref={documentInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.txt"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFileUpload(e.target.files, "document")}
+          />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept=".png,.jpg,.jpeg"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFileUpload(e.target.files, "image")}
+          />
+
           <Textarea
             className="flex-1 min-h-[300px] resize-none"
-            placeholder="输入需求描述，AI 将分析影响范围和完整性..."
+            placeholder="输入需求描述，AI 将分析影响范围和完整性...&#10;&#10;支持拖拽上传文档 (.pdf, .doc, .docx, .txt) 或图片 (.png, .jpg, .jpeg)"
             value={requirementText}
             onChange={(e) => setRequirementText(e.target.value)}
           />
+
+          {/* Uploaded files display */}
+          {(uploadedFiles.length > 0 || uploadedImages.length > 0) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {uploadedFiles.map((file) => (
+                <Badge
+                  key={file.id}
+                  variant="secondary"
+                  className="flex items-center gap-1.5 py-1 px-2 text-xs"
+                >
+                  {file.status === "uploading" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <FileText className="h-3 w-3" />
+                  )}
+                  <span className="max-w-[120px] truncate">{file.name}</span>
+                  <span className="text-muted-foreground">({file.size})</span>
+                  <button
+                    onClick={() => handleRemoveFile(file.id, "document")}
+                    className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+              {uploadedImages.map((file) => (
+                <Badge
+                  key={file.id}
+                  variant="secondary"
+                  className="flex items-center gap-1.5 py-1 px-2 text-xs"
+                >
+                  {file.status === "uploading" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-3 w-3" />
+                  )}
+                  <span className="max-w-[120px] truncate">{file.name}</span>
+                  <span className="text-muted-foreground">({file.size})</span>
+                  <button
+                    onClick={() => handleRemoveFile(file.id, "image")}
+                    className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Drag overlay hint */}
+          {isDragOver && (
+            <div className="absolute inset-0 flex items-center justify-center bg-primary/5 pointer-events-none">
+              <div className="text-primary font-medium">松开以上传文件</div>
+            </div>
+          )}
+
           <Button 
             className="mt-4 w-fit" 
             onClick={handleAnalyze}
-            disabled={!requirementText.trim() || isAnalyzing}
+            disabled={!hasContent || isAnalyzing}
           >
             {isAnalyzing ? "分析中..." : "AI 分析"}
           </Button>
