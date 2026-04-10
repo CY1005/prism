@@ -35,13 +35,16 @@ export default function ProjectOverviewPage() {
   const [isEmptyProject, setIsEmptyProject] = useState(projectId === "3")
   const [realStats, setRealStats] = useState<ProjectStats | null>(null)
   const [realTree, setRealTree] = useState<TreeNodeOverview[] | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
 
   useEffect(() => {
     getProjectStats(projectId).then((r) => {
       if (r.ok) setRealStats(r.data)
+      else setApiError(r.error)
     })
     getProjectTreeOverview(projectId).then((r) => {
       if (r.ok) setRealTree(r.data.tree)
+      else setApiError(r.error)
     })
   }, [projectId])
 
@@ -140,6 +143,12 @@ export default function ProjectOverviewPage() {
           设置
         </Link>
       </div>
+
+      {apiError && (
+        <div className="mx-6 mt-2 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
+          数据服务不可用，显示为缓存数据：{apiError}
+        </div>
+      )}
 
       <div className="flex items-center gap-4 px-6 py-4">
         <div className="grid grid-cols-4 gap-4 flex-1">

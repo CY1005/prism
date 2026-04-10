@@ -74,8 +74,8 @@ def update_settings(
     """Update project name/description."""
     try:
         project = db.query(Project).filter(Project.id == project_id).first()
-    except Exception:
-        raise HTTPException(status_code=404, detail="Project not found")
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}")
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

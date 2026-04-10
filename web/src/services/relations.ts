@@ -5,7 +5,7 @@
  */
 
 const ANALYZER_BASE_URL =
-  process.env.ANALYZER_URL || "http://localhost:8001";
+  process.env.NEXT_PUBLIC_ANALYZER_URL || "http://localhost:8001";
 
 export interface GraphNode {
   id: string;

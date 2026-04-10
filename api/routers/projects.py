@@ -23,7 +23,10 @@ def get_projects(db: Session = Depends(get_db)):
 @router.post("/", response_model=ProjectCreateResponse, status_code=201)
 def create_new_project(req: ProjectCreateRequest, db: Session = Depends(get_db)):
     """Create a new project."""
-    return create_project(db, req.name, req.description, req.template_type)
+    try:
+        return create_project(db, req.name, req.description, req.template_type)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{project_id}/stats", response_model=ProjectStats)

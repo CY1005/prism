@@ -1,6 +1,9 @@
 """Module relation graph data."""
 
+import logging
 from sqlalchemy import func
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from api.models.tables import Node, NodeRelation, DimensionRecord, ProjectDimensionConfig
@@ -11,7 +14,8 @@ def get_relation_graph(db: Session, project_id: str) -> dict:
         nodes = db.query(Node).filter(
             Node.project_id == project_id
         ).all()
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to query nodes: %s", e)
         nodes = []
 
     dim_count = 1
@@ -20,8 +24,8 @@ def get_relation_graph(db: Session, project_id: str) -> dict:
             ProjectDimensionConfig.project_id == project_id,
             ProjectDimensionConfig.enabled == True,
         ).scalar() or 1
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Relations query failed: %s", e)
 
     dim_counts = {}
     try:
@@ -36,8 +40,8 @@ def get_relation_graph(db: Session, project_id: str) -> dict:
             .all()
         ):
             dim_counts[str(row[0])] = row[1]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Relations query failed: %s", e)
 
     graph_nodes = []
     for n in nodes:
@@ -65,8 +69,8 @@ def get_relation_graph(db: Session, project_id: str) -> dict:
                 "relation_type": r.relation_type,
                 "description": r.description,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Relations query failed: %s", e)
 
     return {
         "project_id": project_id,

@@ -3,8 +3,11 @@
 Will be replaced with Claude SDK integration in a later module.
 """
 
+import logging
 import time
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session
 
@@ -28,7 +31,8 @@ def analyze_requirement(
 
     try:
         nodes = query.all()
-    except Exception:
+    except Exception as e:
+        logger.warning("Analyzer DB query failed: %s", e)
         nodes = []
     req_lower = requirement_text.lower()
 

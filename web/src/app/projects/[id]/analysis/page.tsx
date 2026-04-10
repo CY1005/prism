@@ -465,7 +465,7 @@ export default function AnalysisPage() {
                     <h3 className="font-medium text-destructive">分析失败</h3>
                   </div>
                   <p className="text-sm text-muted-foreground">{error}</p>
-                  <Button variant="outline" size="sm" className="mt-3" onClick={() => setError(null)}>
+                  <Button variant="outline" size="sm" className="mt-3" onClick={handleAnalyze}>
                     重试
                   </Button>
                 </Card>

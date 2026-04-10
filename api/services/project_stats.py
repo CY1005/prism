@@ -1,6 +1,9 @@
 """Project statistics and tree overview."""
 
+import logging
 from sqlalchemy import func
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from api.models.tables import (
@@ -37,20 +40,20 @@ def get_project_stats(db: Session, project_id: str) -> dict | None:
         ProjectDimensionConfig.enabled == True,
     ).scalar() or 0
 
-    # Calculate average completion
+    # Calculate average completion (single query with group_by)
     avg_completion = 0.0
     if total_files > 0 and dim_type_count > 0:
-        file_nodes = db.query(Node).filter(
-            Node.project_id == project_id, Node.type == "file"
-        ).all()
-
-        total_percent = 0.0
-        for node in file_nodes:
-            filled = db.query(func.count(func.distinct(DimensionRecord.dimension_type_id))).filter(
-                DimensionRecord.node_id == node.id
-            ).scalar() or 0
-            total_percent += (filled / dim_type_count) * 100
-
+        dim_per_node = (
+            db.query(
+                DimensionRecord.node_id,
+                func.count(func.distinct(DimensionRecord.dimension_type_id)),
+            )
+            .join(Node, DimensionRecord.node_id == Node.id)
+            .filter(Node.project_id == project_id, Node.type == "file")
+            .group_by(DimensionRecord.node_id)
+            .all()
+        )
+        total_percent = sum((cnt / dim_type_count) * 100 for _, cnt in dim_per_node)
         avg_completion = round(total_percent / total_files, 1)
 
     return {

@@ -13,8 +13,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     """Mock login — returns user info with placeholder token."""
     try:
         user = db.query(User).filter(User.email == req.email).first()
-    except Exception:
-        user = None
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}")
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")

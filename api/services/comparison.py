@@ -1,6 +1,9 @@
 """Comparison data from dimension records."""
 
+import logging
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from api.models.tables import DimensionRecord, DimensionType, Node
 
@@ -49,7 +52,8 @@ def get_comparison_data(
             "items": items,
             "total": len(items),
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("Comparison query failed: %s", e)
         return {
             "project_id": project_id,
             "dimension_key": dimension_key,

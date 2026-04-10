@@ -32,15 +32,17 @@ def list_projects(db: Session) -> dict:
 
             avg_completion = 0.0
             if total_files > 0:
-                file_nodes = db.query(Node).filter(
-                    Node.project_id == p.id, Node.type == "file"
-                ).all()
-                total_pct = 0.0
-                for fn in file_nodes:
-                    filled = db.query(func.count(func.distinct(
-                        DimensionRecord.dimension_type_id
-                    ))).filter(DimensionRecord.node_id == fn.id).scalar() or 0
-                    total_pct += (filled / dim_count) * 100
+                dim_per_node = (
+                    db.query(
+                        DimensionRecord.node_id,
+                        func.count(func.distinct(DimensionRecord.dimension_type_id)),
+                    )
+                    .join(Node, DimensionRecord.node_id == Node.id)
+                    .filter(Node.project_id == p.id, Node.type == "file")
+                    .group_by(DimensionRecord.node_id)
+                    .all()
+                )
+                total_pct = sum((cnt / dim_count) * 100 for _, cnt in dim_per_node)
                 avg_completion = round(total_pct / total_files, 1)
 
             result.append({
@@ -80,7 +82,6 @@ def create_project(db: Session, name: str, description: str | None, template_typ
         db.commit()
         db.refresh(project)
         return {"id": str(project.id), "name": project.name}
-    except Exception:
+    except Exception as e:
         db.rollback()
-        # Fallback: return with generated id even if DB write fails
-        return {"id": str(project.id), "name": name}
+        raise RuntimeError(f"Failed to create project: {e}") from e

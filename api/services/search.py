@@ -1,6 +1,9 @@
 """Unified search across nodes, dimension_records, and knowledge_items."""
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import or_, cast, Text
 from sqlalchemy.orm import Session
@@ -42,8 +45,8 @@ def unified_search(
                 "node_path": node.path,
                 "dimension_type": None,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Search query failed: %s", e)
 
     # 2. Search dimension_records by content (JSONB text cast)
     try:
@@ -72,40 +75,37 @@ def unified_search(
                 "node_path": node.path,
                 "dimension_type": dim_type.name,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Search query failed: %s", e)
 
-    # 3. Search knowledge_items
+    # 3. Search knowledge_items (left join Project to avoid N+1)
     try:
-        ki_query = db.query(KnowledgeItem).filter(
-            or_(
-                KnowledgeItem.title.ilike(q),
-                KnowledgeItem.content.ilike(q),
+        ki_query = (
+            db.query(KnowledgeItem, Project)
+            .outerjoin(Project, KnowledgeItem.project_id == Project.id)
+            .filter(
+                or_(
+                    KnowledgeItem.title.ilike(q),
+                    KnowledgeItem.content.ilike(q),
+                )
             )
         )
         if project_id:
             ki_query = ki_query.filter(KnowledgeItem.project_id == project_id)
 
-        for ki in ki_query.limit(limit).all():
-            # Try to get project name
-            project_name = None
-            if ki.project_id:
-                proj = db.query(Project).filter(Project.id == ki.project_id).first()
-                if proj:
-                    project_name = proj.name
-
+        for ki, proj in ki_query.limit(limit).all():
             results.append({
                 "id": str(ki.id),
                 "type": "knowledge",
                 "title": ki.title,
                 "content_snippet": ki.content[:150] if ki.content else "",
                 "project_id": str(ki.project_id) if ki.project_id else None,
-                "project_name": project_name,
+                "project_name": proj.name if proj else None,
                 "node_path": None,
                 "dimension_type": None,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Search query failed: %s", e)
 
     # Deduplicate and limit
     seen = set()
