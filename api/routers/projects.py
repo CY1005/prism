@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from api.db import get_db
 from api.schemas.project import ProjectStats, ProjectTreeOverview
 from api.schemas.project_list import ProjectListResponse, ProjectCreateRequest, ProjectCreateResponse
+from api.schemas.comparison import ComparisonResponse
 from api.services.project_stats import get_project_stats, get_project_tree_overview
 from api.services.project_crud import list_projects, create_project
+from api.services.comparison import get_comparison_data
 
 router = APIRouter()
 
@@ -29,6 +31,16 @@ def project_stats(project_id: str, db: Session = Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="Project not found")
     return result
+
+
+@router.get("/{project_id}/comparison", response_model=ComparisonResponse)
+def project_comparison(
+    project_id: str,
+    dimension_key: str = "competitor_ref",
+    db: Session = Depends(get_db),
+):
+    """Get comparison data for a project from dimension records."""
+    return get_comparison_data(db, project_id, dimension_key)
 
 
 @router.get("/{project_id}/tree-overview", response_model=ProjectTreeOverview)
