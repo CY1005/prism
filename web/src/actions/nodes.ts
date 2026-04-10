@@ -7,8 +7,9 @@ import {
   versionRecords,
   dimensionTypes,
   projectDimensionConfigs,
+  nodeRelations,
 } from "@/db/schema";
-import { eq, and, asc, isNull, inArray } from "drizzle-orm";
+import { eq, and, asc, isNull, inArray, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
@@ -495,6 +496,70 @@ export async function getCompetitiveRecords(projectId: string) {
     );
 
   return records;
+}
+
+export async function getModuleRelations(projectId: string): Promise<{
+  nodes: { id: string; name: string; type: string }[];
+  edges: { source: string; target: string; relation: string }[];
+}> {
+  const user = await requireAuth();
+  await checkProjectAccess(user.id, projectId, "viewer");
+
+  // Get all nodes for this project
+  const projectNodes = await db
+    .select({ id: nodes.id, name: nodes.name, type: nodes.type })
+    .from(nodes)
+    .where(eq(nodes.projectId, projectId));
+
+  if (projectNodes.length === 0) {
+    return { nodes: [], edges: [] };
+  }
+
+  const nodeIds = projectNodes.map((n) => n.id);
+
+  // Get relations where source or target belongs to this project
+  const relations = await db
+    .select({
+      sourceNodeId: nodeRelations.sourceNodeId,
+      targetNodeId: nodeRelations.targetNodeId,
+      relationType: nodeRelations.relationType,
+    })
+    .from(nodeRelations)
+    .where(
+      or(
+        inArray(nodeRelations.sourceNodeId, nodeIds),
+        inArray(nodeRelations.targetNodeId, nodeIds),
+      ),
+    );
+
+  // Collect all node IDs referenced in relations (may include cross-project)
+  const referencedIds = new Set<string>();
+  for (const rel of relations) {
+    referencedIds.add(rel.sourceNodeId);
+    referencedIds.add(rel.targetNodeId);
+  }
+
+  // Fetch any external nodes not already in projectNodes
+  const projectNodeIds = new Set(nodeIds);
+  const externalIds = [...referencedIds].filter((id) => !projectNodeIds.has(id));
+
+  let allNodes = [...projectNodes];
+  if (externalIds.length > 0) {
+    const externalNodes = await db
+      .select({ id: nodes.id, name: nodes.name, type: nodes.type })
+      .from(nodes)
+      .where(inArray(nodes.id, externalIds));
+    allNodes = [...allNodes, ...externalNodes];
+  }
+
+  return {
+    nodes: allNodes,
+    edges: relations.map((r) => ({
+      source: r.sourceNodeId,
+      target: r.targetNodeId,
+      relation: r.relationType,
+    })),
+  };
 }
 
 export async function updateNodeSortOrder(

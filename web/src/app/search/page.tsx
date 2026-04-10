@@ -72,11 +72,9 @@ export default function SearchPage() {
             </Avatar>
             <span className="text-sm text-foreground">陈琦</span>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href="/login">
-              <LogOut className="h-4 w-4 text-muted-foreground" />
-            </Link>
-          </Button>
+          <Link href="/login" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+            <LogOut className="h-4 w-4 text-muted-foreground" />
+          </Link>
         </div>
       </header>
 

@@ -37,14 +37,14 @@ import {
 } from "@/components/ui/select"
 import { ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getProject } from "@/actions/projects"
 import {
+  getProject,
   updateProject,
   getProjectMembers,
   addProjectMember,
   removeProjectMember,
   updateProjectAIConfig,
-} from "@/actions/project-settings"
+} from "@/actions/projects"
 
 type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai"
 

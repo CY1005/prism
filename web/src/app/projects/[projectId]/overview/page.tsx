@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useEffect } from "react"
-import { Search, Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus } from "lucide-react"
+import { Search, Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,8 +19,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { detailStrings, productLines, recentUpdates, statsLabels } from "@/lib/project-detail-data"
-import { openclawStrings, openclawSystemLayers, openclawRecentUpdates, openclawStatsLabels } from "@/lib/openclaw-data"
+import { detailStrings, recentUpdates } from "@/lib/project-detail-data"
+import { openclawStrings, openclawRecentUpdates } from "@/lib/openclaw-data"
 import { getProjectStats, getProjectTreeOverview, type ProjectStats, type TreeNodeOverview } from "@/services/project-stats"
 
 function getStatusColor(percent: number) {
@@ -29,40 +29,64 @@ function getStatusColor(percent: number) {
   return "bg-red-500"
 }
 
+/** Transform top-level tree nodes into the layers visualization format */
+function treeToLayers(tree: TreeNodeOverview[]) {
+  return tree.map((node) => ({
+    name: node.name,
+    completion: Math.round(node.completion_percent),
+    modules: node.children.map((child) => ({
+      name: child.name,
+      completion: Math.round(child.completion_percent),
+    })),
+  }))
+}
+
 export default function ProjectOverviewPage() {
   const params = useParams()
   const projectId = params.projectId as string
   const [isEmptyProject, setIsEmptyProject] = useState(projectId === "3")
   const [realStats, setRealStats] = useState<ProjectStats | null>(null)
   const [realTree, setRealTree] = useState<TreeNodeOverview[] | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [treeLoading, setTreeLoading] = useState(true)
   const [apiError, setApiError] = useState<string | null>(null)
 
   useEffect(() => {
+    setStatsLoading(true)
     getProjectStats(projectId).then((r) => {
+      setStatsLoading(false)
       if (r.ok) setRealStats(r.data)
       else setApiError(r.error)
     })
+
+    setTreeLoading(true)
     getProjectTreeOverview(projectId).then((r) => {
+      setTreeLoading(false)
       if (r.ok) setRealTree(r.data.tree)
-      else setApiError(r.error)
+      else setApiError((prev) => prev ?? r.error)
     })
   }, [projectId])
 
-  // Use different data based on project ID
   const isOpenClaw = projectId === "2"
-
   const strings = isOpenClaw ? openclawStrings : detailStrings
-  // Use real stats if available, fallback to mock
-  const stats = realStats
+
+  // Stats: real data only; show loading/error states in render
+  const statsData = realStats
     ? {
         line1: `${realStats.total_folders} 个`,
         line2: `${realStats.total_folders + realStats.total_files} 个`,
         line3: `${realStats.total_files} 个`,
         line4: `${Math.round(realStats.avg_completion_percent)}%`,
+        avgPercent: Math.round(realStats.avg_completion_percent),
       }
-    : isOpenClaw ? openclawStatsLabels : statsLabels
-  const layers = isOpenClaw ? openclawSystemLayers : productLines
+    : null
+
+  // Layers: use real tree data when available
+  const layers = realTree ? treeToLayers(realTree) : null
+
+  // Recent updates: no real API yet — TODO: replace with real API when available
   const updates = isOpenClaw ? openclawRecentUpdates : recentUpdates
+
   const projectTypeBadge = isOpenClaw
     ? { label: "系统架构", color: "border-green-200 text-green-700 bg-green-50" }
     : { label: "产品分析", color: "border-blue-200 text-blue-700 bg-blue-50" }
@@ -76,16 +100,12 @@ export default function ProjectOverviewPage() {
           <Input placeholder={strings.searchPlaceholder} className="pl-9 cursor-pointer" readOnly />
         </Link>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href="/admin">
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </Link>
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href={`/projects/${projectId}/settings`}>
-              <Settings className="h-4 w-4 text-muted-foreground" />
-            </Link>
-          </Button>
+          <Link href="/admin" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </Link>
+          <Link href={`/projects/${projectId}/settings`} className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+            <Settings className="h-4 w-4 text-muted-foreground" />
+          </Link>
           <Button variant="ghost" size="icon" className="h-8 w-8">
             <Bell className="h-4 w-4 text-muted-foreground" />
           </Button>
@@ -95,11 +115,9 @@ export default function ProjectOverviewPage() {
             </Avatar>
             <span className="text-sm text-foreground">{strings.userName}</span>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href="/login">
-              <LogOut className="h-4 w-4 text-muted-foreground" />
-            </Link>
-          </Button>
+          <Link href="/login" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+            <LogOut className="h-4 w-4 text-muted-foreground" />
+          </Link>
         </div>
       </header>
 
@@ -140,6 +158,9 @@ export default function ProjectOverviewPage() {
         <Link href={`/projects/${projectId}/issues`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           问题沉淀
         </Link>
+        <Link href={`/projects/${projectId}/relation-graph`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          关系图
+        </Link>
         <div className="flex-1" />
         <Link href={`/projects/${projectId}/settings`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm flex items-center gap-1">
           <Settings className="h-3.5 w-3.5" />
@@ -148,37 +169,52 @@ export default function ProjectOverviewPage() {
       </div>
 
       {apiError && (
-        <div className="mx-6 mt-2 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
-          数据服务不可用，显示为缓存数据：{apiError}
+        <div className="mx-6 mt-2 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+          数据加载失败：{apiError}
         </div>
       )}
 
       <div className="flex items-center gap-4 px-6 py-4">
         <div className="grid grid-cols-4 gap-4 flex-1">
-          <Card className="border-border/60 p-4 shadow-sm">
-            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0" : stats.line1}</span>
-            <p className="text-sm text-muted-foreground">{strings.productLine}</p>
-          </Card>
-          <Card className="border-border/60 p-4 shadow-sm">
-            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0" : stats.line2}</span>
-            <p className="text-sm text-muted-foreground">{strings.modules}</p>
-          </Card>
-          <Card className="border-border/60 p-4 shadow-sm">
-            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0" : stats.line3}</span>
-            <p className="text-sm text-muted-foreground">{strings.features}</p>
-          </Card>
-          <Card className="border-border/60 p-4 shadow-sm">
-            <span className="text-2xl font-bold text-foreground">{isEmptyProject ? "0%" : stats.line4}</span>
-            <p className="text-sm text-muted-foreground">{strings.avgCompletion}</p>
-            <Progress value={isEmptyProject ? 0 : (isOpenClaw ? 45 : 58)} className="mt-2 h-2" />
-          </Card>
+          {statsLoading && !isEmptyProject ? (
+            <div className="col-span-4 flex items-center gap-2 text-sm text-muted-foreground py-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              加载统计数据中...
+            </div>
+          ) : (
+            <>
+              <Card className="border-border/60 p-4 shadow-sm">
+                <span className="text-2xl font-bold text-foreground">
+                  {isEmptyProject ? "0" : (statsData?.line1 ?? "—")}
+                </span>
+                <p className="text-sm text-muted-foreground">{strings.productLine}</p>
+              </Card>
+              <Card className="border-border/60 p-4 shadow-sm">
+                <span className="text-2xl font-bold text-foreground">
+                  {isEmptyProject ? "0" : (statsData?.line2 ?? "—")}
+                </span>
+                <p className="text-sm text-muted-foreground">{strings.modules}</p>
+              </Card>
+              <Card className="border-border/60 p-4 shadow-sm">
+                <span className="text-2xl font-bold text-foreground">
+                  {isEmptyProject ? "0" : (statsData?.line3 ?? "—")}
+                </span>
+                <p className="text-sm text-muted-foreground">{strings.features}</p>
+              </Card>
+              <Card className="border-border/60 p-4 shadow-sm">
+                <span className="text-2xl font-bold text-foreground">
+                  {isEmptyProject ? "0%" : (statsData?.line4 ?? "—")}
+                </span>
+                <p className="text-sm text-muted-foreground">{strings.avgCompletion}</p>
+                <Progress value={isEmptyProject ? 0 : (statsData?.avgPercent ?? 0)} className="mt-2 h-2" />
+              </Card>
+            </>
+          )}
         </div>
-        <Button variant="outline" className="h-auto py-3 px-4 flex items-center gap-2" asChild>
-          <Link href={`/projects/${projectId}/import`}>
-            <Upload className="h-4 w-4" />
-            <span>导入数据</span>
-          </Link>
-        </Button>
+        <Link href={`/projects/${projectId}/import`} className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium hover:bg-accent transition-colors">
+          <Upload className="h-4 w-4" />
+          <span>导入数据</span>
+        </Link>
       </div>
 
       <div className="flex flex-1 gap-6 px-6 pb-6">
@@ -193,12 +229,10 @@ export default function ProjectOverviewPage() {
                 上传已有的知识库文件，AI 帮你自动整理成结构化知识
               </p>
               <div className="flex items-center gap-3">
-                <Button asChild>
-                  <Link href={`/projects/${projectId}/import`}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    上传知识库（zip）
-                  </Link>
-                </Button>
+                <Link href={`/projects/${projectId}/import`} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+                  <Upload className="h-4 w-4" />
+                  上传知识库（zip）
+                </Link>
                 <Button variant="outline" onClick={() => setIsEmptyProject(false)}>
                   <Plus className="h-4 w-4 mr-2" />
                   手动创建模块
@@ -208,42 +242,54 @@ export default function ProjectOverviewPage() {
           </Card>
         ) : (
           <Card className="flex-1 border-border/60 p-6 shadow-sm">
-            <div className="flex gap-6">
-              {layers.map((line) => (
-                <div key={line.name} className="flex flex-col items-center">
-                  <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-3">
-                    <span
-                      className={`h-2 w-2 rounded-full ${getStatusColor(line.completion)}`}
-                    />
-                    <span className="text-sm font-medium text-foreground">
-                      {line.name}
-                    </span>
+            {treeLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                加载结构数据中...
+              </div>
+            ) : layers && layers.length > 0 ? (
+              <div className="flex gap-6">
+                {layers.map((line) => (
+                  <div key={line.name} className="flex flex-col items-center">
+                    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-3">
+                      <span
+                        className={`h-2 w-2 rounded-full ${getStatusColor(line.completion)}`}
+                      />
+                      <span className="text-sm font-medium text-foreground">
+                        {line.name}
+                      </span>
+                    </div>
+                    <div className="h-4 w-px bg-border" />
+                    <div className="flex flex-col gap-2">
+                      {line.modules.map((module, index) => (
+                        <div key={module.name} className="flex flex-col items-center">
+                          {index > 0 && <div className="h-2 w-px bg-border" />}
+                          <Link href={isOpenClaw ? "/openclaw" : "/"} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${getStatusColor(module.completion)}`}
+                            />
+                            <span className="text-xs text-foreground">
+                              {module.name}
+                            </span>
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="h-4 w-px bg-border" />
-                  <div className="flex flex-col gap-2">
-                    {line.modules.map((module, index) => (
-                      <div key={module.name} className="flex flex-col items-center">
-                        {index > 0 && <div className="h-2 w-px bg-border" />}
-                        <Link href={isOpenClaw ? "/openclaw" : "/"} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer">
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${getStatusColor(module.completion)}`}
-                          />
-                          <span className="text-xs text-foreground">
-                            {module.name}
-                          </span>
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                暂无结构数据
+              </div>
+            )}
           </Card>
         )}
 
         <Card className="w-[280px] border-border/60 p-4 shadow-sm">
           <h3 className="mb-4 font-medium text-foreground">{strings.recentUpdates}</h3>
           <div className="space-y-0">
+            {/* TODO: 接入真实最近更新 API */}
             {updates.map((update, index) => (
               <div key={index}>
                 <div className="flex gap-3 py-3">
