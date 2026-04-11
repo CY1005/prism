@@ -154,7 +154,7 @@ export default function ProjectOverviewPage() {
           </Card>
         </div>
         <Button variant="outline" className="h-auto py-3 px-4 flex items-center gap-2" asChild>
-          <Link href={`/projects/${projectId}/import`}>
+          <Link href={`/projects/${projectId}/import-ai`}>
             <Upload className="h-4 w-4" />
             <span>导入数据</span>
           </Link>
@@ -174,7 +174,7 @@ export default function ProjectOverviewPage() {
               </p>
               <div className="flex items-center gap-3">
                 <Button asChild>
-                  <Link href={`/projects/${projectId}/import`}>
+                  <Link href={`/projects/${projectId}/import-ai`}>
                     <Upload className="h-4 w-4 mr-2" />
                     上传知识库（zip）
                   </Link>

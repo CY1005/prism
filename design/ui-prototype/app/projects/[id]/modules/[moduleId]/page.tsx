@@ -52,6 +52,8 @@ import {
 
 import { moduleDetailData, type IssueType } from "@/lib/module-data"
 import { detailStrings } from "@/lib/project-detail-data"
+import { treeData } from "@/lib/tree-data"
+import { FeatureTree } from "@/components/feature-tree"
 import { cn } from "@/lib/utils"
 
 function getStatusDotColor(status: "green" | "yellow" | "red") {
@@ -234,15 +236,29 @@ export default function ModuleOverviewPage() {
         </Link>
       </div>
 
-      {/* Scrollable Content */}
-      <ScrollArea className="flex-1">
-        <div className="max-w-4xl mx-auto p-6">
-          {/* Badge */}
-          <div className="flex items-center justify-end mb-6">
-            <Badge variant="secondary">
-              {moduleData.featureCount}个功能项 · 完善度 {moduleData.avgCompletion}%
-            </Badge>
+      {/* Main Layout: Left Tree + Right Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar: Feature Tree */}
+        <div className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto">
+          <div className="p-3 border-b border-border">
+            <h3 className="text-sm font-medium text-muted-foreground">功能树</h3>
           </div>
+          <FeatureTree
+            data={treeData}
+            selectedId={selectedFeatureId || moduleId}
+            onSelect={(id) => setSelectedFeatureId(id === selectedFeatureId ? null : id)}
+          />
+        </div>
+
+        {/* Right Content */}
+        <ScrollArea className="flex-1">
+          <div className="max-w-4xl mx-auto p-6">
+            {/* Badge */}
+            <div className="flex items-center justify-end mb-6">
+              <Badge variant="secondary">
+                {moduleData.featureCount}个功能项 · 完善度 {moduleData.avgCompletion}%
+              </Badge>
+            </div>
 
           {/* Dimension Coverage */}
           <Card className="border-border/60 shadow-sm p-5 mb-6">
@@ -451,8 +467,9 @@ export default function ModuleOverviewPage() {
               )}
             </Card>
           )}
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   )
 }

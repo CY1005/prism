@@ -108,7 +108,7 @@ function StreamingDots() {
 export default function AiAnalysisPage() {
   const params = useParams()
   const projectId = params.id as string
-  const [requirementText, setRequirementText] = useState("")
+  const [requirementText, setRequirementText] = useState("推理服务支持滚动更新策略，允许用户在不中断服务的情况下更新模型版本，支持配置最大不可用副本数和滚动更新间隔。")
   const [uploadedFile, setUploadedFile] = useState<{ name: string; size: string } | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisLevel, setAnalysisLevel] = useState<0 | 1 | 2 | 3>(0) // 0=not started
