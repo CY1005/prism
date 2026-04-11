@@ -19,21 +19,21 @@ import { detailStrings } from "@/lib/project-detail-data"
 import { panoramaModules, panoramaStats, type PanoramaModule } from "@/lib/panorama-data"
 
 function getCompletionColor(percent: number) {
-  if (percent >= 80) return "bg-green-500/15 border-green-500/30 hover:border-green-500/50"
-  if (percent >= 40) return "bg-yellow-500/15 border-yellow-500/30 hover:border-yellow-500/50"
-  return "bg-red-500/15 border-red-500/30 hover:border-red-500/50"
+  if (percent >= 80) return "bg-emerald-50 border-emerald-200/60 hover:border-emerald-300"
+  if (percent >= 40) return "bg-amber-50/70 border-amber-200/60 hover:border-amber-300"
+  return "bg-rose-50/70 border-rose-200/60 hover:border-rose-300"
 }
 
 function getCompletionTextColor(percent: number) {
-  if (percent >= 80) return "text-green-700"
-  if (percent >= 40) return "text-yellow-700"
-  return "text-red-700"
+  if (percent >= 80) return "text-emerald-600"
+  if (percent >= 40) return "text-amber-600"
+  return "text-rose-500"
 }
 
 function getCompletionDot(percent: number) {
-  if (percent >= 80) return "bg-green-500"
-  if (percent >= 40) return "bg-yellow-500"
-  return "bg-red-500"
+  if (percent >= 80) return "bg-emerald-400"
+  if (percent >= 40) return "bg-amber-400"
+  return "bg-rose-400"
 }
 
 // Calculate relative sizes for treemap simulation
@@ -141,9 +141,9 @@ export default function PanoramaTreemapPage() {
         <div className="flex-1" />
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <span>面积 = 功能项数量</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-red-500/30 border border-red-500/50" />完善度 &lt; 40%</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-yellow-500/30 border border-yellow-500/50" />40% - 80%</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-green-500/30 border border-green-500/50" />完善度 &gt; 80%</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-100 border border-rose-300" />完善度 &lt; 40%</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-100 border border-amber-300" />40% - 80%</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-100 border border-emerald-300" />完善度 &gt; 80%</span>
         </div>
       </div>
 
