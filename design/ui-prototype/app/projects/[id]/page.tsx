@@ -149,7 +149,7 @@ export default function ProjectOverviewPage() {
       <div className="flex flex-1 gap-6 px-6 pb-6">
         {isEmptyProject ? (
           <Card className="flex-1 border-border/60 p-6 shadow-sm flex flex-col items-center justify-center min-h-[400px]">
-            <div className="flex flex-col items-center text-center max-w-md">
+            <div className="flex flex-col items-center text-center max-w-lg">
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-6">
                 <FolderUp className="h-8 w-8 text-muted-foreground" />
               </div>
@@ -157,7 +157,7 @@ export default function ProjectOverviewPage() {
               <p className="text-sm text-muted-foreground mb-6">
                 上传已有的知识库文件，AI 帮你自动整理成结构化知识
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-8">
                 <Button asChild>
                   <Link href={`/projects/${projectId}/import-ai`}>
                     <Upload className="h-4 w-4 mr-2" />
@@ -168,6 +168,41 @@ export default function ProjectOverviewPage() {
                   <Plus className="h-4 w-4 mr-2" />
                   手动创建模块
                 </Button>
+              </div>
+
+              {/* 3-step guidance */}
+              <Separator className="mb-6 w-full" />
+              <div className="grid grid-cols-3 gap-4 w-full">
+                <Card className="border-border/60 p-4 shadow-sm text-left">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
+                    <h4 className="text-sm font-medium">上传知识库zip</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">将已有的 Markdown/文档打包上传，支持嵌套目录结构</p>
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+                    <Link href={`/projects/${projectId}/import-ai`}>开始上传 &rarr;</Link>
+                  </Button>
+                </Card>
+                <Card className="border-border/60 p-4 shadow-sm text-left">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">2</span>
+                    <h4 className="text-sm font-medium">AI分析并映射</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">AI 自动识别产品线、模块、功能项，生成结构化知识图谱</p>
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+                    <Link href={`/projects/${projectId}/data-flow`}>查看数据流转 &rarr;</Link>
+                  </Button>
+                </Card>
+                <Card className="border-border/60 p-4 shadow-sm text-left">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">3</span>
+                    <h4 className="text-sm font-medium">完善一个模块</h4>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">选择一个模块深入填写维度，体验全景图的完整效果</p>
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+                    <Link href={`/projects/${projectId}/panorama`}>查看全景图 &rarr;</Link>
+                  </Button>
+                </Card>
               </div>
             </div>
           </Card>

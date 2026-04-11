@@ -372,26 +372,41 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
           {/* AI Config Tab */}
           {activeTab === "ai" && (
             <div>
-              <h2 className="text-lg font-semibold mb-6">{settingsStrings.aiConfig}</h2>
+              <h2 className="text-lg font-semibold mb-2">AI Provider 配置</h2>
+              <p className="text-sm text-muted-foreground mb-6">配置项目使用的 AI 服务提供商和认证信息</p>
               <div className="space-y-4 max-w-md">
                 <div className="space-y-2">
-                  <Label>{settingsStrings.aiProvider}</Label>
-                  <Select defaultValue="local">
+                  <Label>默认 Provider</Label>
+                  <Select defaultValue="claude">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="local">{settingsStrings.localMode}</SelectItem>
-                      <SelectItem value="claude">Claude API</SelectItem>
-                      <SelectItem value="codex">Codex API</SelectItem>
-                      <SelectItem value="kimi">Kimi API</SelectItem>
+                      <SelectItem value="claude">Claude</SelectItem>
+                      <SelectItem value="codex">Codex</SelectItem>
+                      <SelectItem value="kimi">Kimi</SelectItem>
+                      <SelectItem value="gpt4">GPT-4</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>API Key</Label>
-                  <Input type="password" placeholder="sk-..." />
+                  <div className="flex gap-2">
+                    <Input type="password" defaultValue="****" className="flex-1" />
+                    <Button variant="outline">更新</Button>
+                  </div>
                 </div>
+                <Button variant="outline">测试连接</Button>
+
+                <Separator className="my-4" />
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">用量统计</h3>
+                  <p className="text-sm text-muted-foreground">本月已使用: 12,450 tokens</p>
+                </div>
+
+                <p className="text-xs text-muted-foreground">API Key 加密存储，不在前端明文展示</p>
+
                 <Button variant="default">{settingsStrings.saveConfig}</Button>
               </div>
             </div>

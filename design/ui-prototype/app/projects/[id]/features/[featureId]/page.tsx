@@ -16,6 +16,10 @@ import {
   Building,
   ChevronRight,
   History,
+  Plus,
+  Bug,
+  Wrench,
+  PenTool,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -170,6 +174,12 @@ export default function FeatureDetailPage() {
         {/* Scrollable Content */}
         <ScrollArea className="flex-1">
           <div className="mx-auto max-w-4xl space-y-4 p-6">
+            {/* Template Indicator */}
+            <div className="flex items-center gap-2 mb-4">
+              <Badge variant="outline" className="text-xs">产品竞品分析模板</Badge>
+              <span className="text-xs text-muted-foreground">8 个维度 · 已填写 5 个</span>
+            </div>
+
             {/* Card 1: 功能描述 */}
             <DimensionCard
               title="功能描述"
@@ -451,6 +461,119 @@ export default function FeatureDetailPage() {
             >
               <p className="text-sm text-muted-foreground">竞品参考内容...</p>
             </DimensionCard>
+
+            {/* F6: Competitor Reference Detail */}
+            <Card className="border-border/60 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-medium">竞品参考</h3>
+                <Button variant="outline" size="sm"><Plus className="h-3.5 w-3.5 mr-1" />添加</Button>
+              </div>
+              <div className="space-y-4">
+                {/* Competitor 1: SageMaker */}
+                <div className="rounded-md border border-border p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-medium text-sm">Amazon SageMaker</span>
+                    <Badge variant="outline" className="text-xs">v2.x</Badge>
+                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-xs">有</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    基于 SageMaker Inference Endpoints，支持多模型部署和自动扩缩容，GPU 实例通过 EC2 实例族选择。
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-md bg-green-50/50 p-3">
+                      <h5 className="text-xs font-medium text-green-700 mb-1">优势</h5>
+                      <ul className="text-xs text-muted-foreground space-y-0.5">
+                        <li>- 成熟的 ML Pipeline 生态</li>
+                        <li>- 自动模型优化 (Neo)</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-md bg-red-50/50 p-3">
+                      <h5 className="text-xs font-medium text-red-700 mb-1">劣势</h5>
+                      <ul className="text-xs text-muted-foreground space-y-0.5">
+                        <li>- 仅支持 AWS 生态</li>
+                        <li>- 成本较高</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                {/* Competitor 2: Run:ai */}
+                <div className="rounded-md border border-border p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-medium text-sm">Run:ai</span>
+                    <Badge variant="outline" className="text-xs">v2.16</Badge>
+                    <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100 text-xs">部分</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    专注 GPU 编排和虚拟化，支持 GPU 分片和动态资源池化，基于 Kubernetes 原生调度扩展。
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-md bg-green-50/50 p-3">
+                      <h5 className="text-xs font-medium text-green-700 mb-1">优势</h5>
+                      <ul className="text-xs text-muted-foreground space-y-0.5">
+                        <li>- GPU 虚拟化领先</li>
+                        <li>- K8s 原生集成</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-md bg-red-50/50 p-3">
+                      <h5 className="text-xs font-medium text-red-700 mb-1">劣势</h5>
+                      <ul className="text-xs text-muted-foreground space-y-0.5">
+                        <li>- 仅专注调度层</li>
+                        <li>- 不含推理serving能力</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* F7: Issue Panel */}
+            <Card className="border-border/60 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-medium">关联问题 <Badge variant="secondary">3</Badge></h3>
+                <Button variant="outline" size="sm"><Plus className="h-3.5 w-3.5 mr-1" />添加问题</Button>
+              </div>
+              <div className="space-y-3">
+                {/* Issue 1: bug */}
+                <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 mt-0.5">
+                    <Bug className="h-3.5 w-3.5 text-red-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-xs">bug</Badge>
+                      <span className="text-sm font-medium">多副本创建时GPU资源未释放</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">来源维度：<span className="text-foreground">测试分析</span></p>
+                  </div>
+                </div>
+                {/* Issue 2: 技术债 */}
+                <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100 mt-0.5">
+                    <Wrench className="h-3.5 w-3.5 text-orange-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">技术债</Badge>
+                      <span className="text-sm font-medium">推理服务创建接口缺少参数校验</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">来源维度：<span className="text-foreground">工程经验</span></p>
+                  </div>
+                </div>
+                {/* Issue 3: 设计缺陷 */}
+                <div className="flex items-start gap-3 rounded-md border border-border p-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-100 mt-0.5">
+                    <PenTool className="h-3.5 w-3.5 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs">设计缺陷</Badge>
+                      <span className="text-sm font-medium">服务名称不支持中文导致用户困惑</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">来源维度：<span className="text-foreground">设计决策</span></p>
+                  </div>
+                </div>
+              </div>
+            </Card>
 
             {/* Version Timeline Section */}
             <div className="mt-8 pt-6 border-t border-border">

@@ -102,11 +102,11 @@ export const graphNodes = [
   { id: "5", name: "监控告警", x: 78, y: 20, completion: 50 },
   { id: "6", name: "GPU管理", x: 12, y: 70, completion: 90 },
   { id: "7", name: "配额管理", x: 50, y: 72, completion: 35 },
-  { id: "8", name: "用户管理", x: 82, y: 58, completion: 75 },
-  { id: "9", name: "存储管理", x: 28, y: 88, completion: 40 },
-  { id: "10", name: "镜像管理", x: 58, y: 88, completion: 55 },
-  { id: "11", name: "API网关", x: 72, y: 75, completion: 30 },
-  { id: "12", name: "计费统计", x: 88, y: 42, completion: 25 },
+  { id: "8", name: "用户管理", x: 80, y: 58, completion: 75 },
+  { id: "9", name: "存储管理", x: 28, y: 78, completion: 40 },
+  { id: "10", name: "镜像管理", x: 58, y: 78, completion: 55 },
+  { id: "11", name: "API网关", x: 72, y: 70, completion: 30 },
+  { id: "12", name: "计费统计", x: 82, y: 42, completion: 25 },
 ]
 
 export const graphEdges: { from: string; to: string; type: RelationType }[] = [

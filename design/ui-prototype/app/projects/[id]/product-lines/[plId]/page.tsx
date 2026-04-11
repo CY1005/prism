@@ -13,6 +13,7 @@ import {
   Folder,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -144,6 +145,25 @@ export default function ProductLineOverviewPage() {
         {/* Right Content */}
         <ScrollArea className="flex-1">
           <div className="max-w-4xl mx-auto p-6">
+          {/* Product Line Switcher */}
+          <div className="flex items-center gap-2 mb-6">
+            {[
+              { id: "ops-management", name: "平台运维管控", count: 12 },
+              { id: "algorithm-training", name: "算法研发与训练", count: 10 },
+              { id: "console", name: "控制台与运营后台", count: 3 },
+              { id: "engineering", name: "工程部署", count: 2 },
+            ].map((pl) => (
+              <Link key={pl.id} href={`/projects/${projectId}/product-lines/${pl.id}`}>
+                <Badge
+                  variant={plId === pl.id ? "default" : "outline"}
+                  className="cursor-pointer"
+                >
+                  {pl.name} ({pl.count})
+                </Badge>
+              </Link>
+            ))}
+          </div>
+
           {/* Stats Cards */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             <Card className="border-border/60 p-4 shadow-sm">
