@@ -208,7 +208,7 @@ export default function ModuleOverviewPage() {
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbLink href={`/projects/${projectId}/product-lines/private-cloud`}>{moduleData.productLineName}</BreadcrumbLink>
+              <BreadcrumbLink href={`/projects/${projectId}/product-lines/ops-management`}>{moduleData.productLineName}</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
@@ -224,7 +224,7 @@ export default function ModuleOverviewPage() {
       <div className="flex items-center gap-6 border-b border-border px-6">
         <Link href={`/projects/${projectId}`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">概览</Link>
         <Link href={`/projects/${projectId}/panorama`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">全景图</Link>
-        <Link href={`/projects/${projectId}/product-lines/private-cloud`} className="border-b-2 border-primary text-primary font-medium pb-3 pt-2 text-sm">产品线</Link>
+        <Link href={`/projects/${projectId}/product-lines/ops-management`} className="border-b-2 border-primary text-primary font-medium pb-3 pt-2 text-sm">产品线</Link>
         <Link href={`/projects/${projectId}/analysis`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">需求工作台</Link>
         <Link href={`/projects/${projectId}/ai-analysis`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">AI需求分析</Link>
         <Link href={`/projects/${projectId}/comparison`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">竞品对比</Link>
@@ -295,7 +295,7 @@ export default function ModuleOverviewPage() {
                 <div>
                   <label className="text-sm font-medium mb-1.5 block">名称</label>
                   <Input
-                    placeholder={createType === "product-line" ? "如：私有云、公有云、智算中心" : createType === "module" ? "如：推理服务、训练服务" : "如：创建推理服务、自动扩缩容"}
+                    placeholder={createType === "product-line" ? "如：平台运维管控、算法研发与训练" : createType === "module" ? "如：推理服务、训练服务" : "如：创建推理服务、自动扩缩容"}
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
                   />
@@ -305,21 +305,23 @@ export default function ModuleOverviewPage() {
                     <label className="text-sm font-medium mb-1.5 block">
                       {createType === "module" ? "所属产品线" : "所属模块"}
                     </label>
-                    <Select defaultValue={createType === "module" ? "private-cloud" : "inference-service"}>
+                    <Select defaultValue={createType === "module" ? "ops-management" : "inference-service"}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {createType === "module" ? (
                           <>
-                            <SelectItem value="private-cloud">私有云</SelectItem>
-                            <SelectItem value="smart-computing">智算中心</SelectItem>
+                            <SelectItem value="ops-management">平台运维管控</SelectItem>
+                            <SelectItem value="algorithm-training">算法研发与训练</SelectItem>
+                            <SelectItem value="console">控制台与运营后台</SelectItem>
+                            <SelectItem value="engineering">工程部署</SelectItem>
                           </>
                         ) : (
                           <>
                             <SelectItem value="inference-service">推理服务</SelectItem>
-                            <SelectItem value="training-service">训练服务</SelectItem>
-                            <SelectItem value="ops-management">运维管理</SelectItem>
+                            <SelectItem value="gpu-management">GPU管理</SelectItem>
+                            <SelectItem value="rp01-resource-overview">资源总览与监控</SelectItem>
                           </>
                         )}
                       </SelectContent>
@@ -404,12 +406,16 @@ export default function ModuleOverviewPage() {
                     )}
                   >
                     <TableCell>
-                      <span className={cn(
-                        "font-medium",
-                        selectedFeatureId === feature.id ? "text-primary" : "text-foreground"
-                      )}>
+                      <Link
+                        href={`/projects/${projectId}/features/${feature.id}`}
+                        className={cn(
+                          "font-medium hover:underline",
+                          selectedFeatureId === feature.id ? "text-primary" : "text-foreground"
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {feature.name}
-                      </span>
+                      </Link>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{feature.version}</Badge>

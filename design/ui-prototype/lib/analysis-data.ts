@@ -12,9 +12,9 @@ export const analysisResultData = {
   completenessCheck: {
     title: "完整性检查",
     items: [
-      { text: "私有云场景已覆盖", passed: true },
+      { text: "标准部署场景已覆盖", passed: true },
       { text: "GPU类型差异已说明", passed: true },
-      { text: "智算中心场景未提及", passed: false },
+      { text: "大规模集群场景未提及", passed: false },
       { text: "开关状态下行为未定义", passed: false },
       { text: "定时扩缩容联动未说明", passed: false },
     ],
@@ -42,7 +42,7 @@ export const analysisResultData = {
       },
       {
         id: 3,
-        description: "智算中心下相同操作是否一致",
+        description: "大规模集群场景下相同操作是否一致",
         priority: "P1" as const,
         relatedFeature: "创建推理服务",
       },

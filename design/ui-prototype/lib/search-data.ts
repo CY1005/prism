@@ -1,7 +1,7 @@
 export const searchStrings = {
   productLine: "产品线",
-  privateCloud: "私有云",
-  smartComputing: "智算中心",
+  opsManagement: "平台运维管控",
+  algorithmTraining: "算法研发与训练",
   moduleLabel: "模块",
   inferenceService: "推理服务",
   trainingService: "训练服务",
@@ -33,8 +33,8 @@ export interface SearchResultItem {
 export const searchResults: SearchResultItem[] = [
   {
     title: "拼卡管理",
-    breadcrumb: "AI云平台竞品分析 → 私有云 → 推理服务 → 拼卡管理",
-    path: "私有云 > 推理服务 > 拼卡管理",
+    breadcrumb: "AI云平台竞品分析 → 算法研发与训练 → 推理服务 → 拼卡管理",
+    path: "算法研发与训练 > 推理服务 > 拼卡管理",
     textBefore: "...支持多块GPU",
     highlight: "拼卡",
     textAfter: "组成虚拟大显存...",
@@ -43,8 +43,8 @@ export const searchResults: SearchResultItem[] = [
   },
   {
     title: "创建推理服务",
-    breadcrumb: "AI云平台竞品分析 → 私有云 → 推理服务 → 创建推理服务",
-    path: "私有云 > 推理服务 > 创建推理服务",
+    breadcrumb: "AI云平台竞品分析 → 算法研发与训练 → 推理服务 → 创建推理服务",
+    path: "算法研发与训练 > 推理服务 > 创建推理服务",
     textBefore: "...NUMA亲和性问题：",
     highlight: "拼卡",
     textAfter: "后推理延迟反而增大...",
@@ -53,8 +53,8 @@ export const searchResults: SearchResultItem[] = [
   },
   {
     title: "GPU拼卡后推理延迟增大",
-    breadcrumb: "AI云平台竞品分析 → 私有云 → 推理服务 → 拼卡管理",
-    path: "私有云 > 推理服务 > 拼卡管理",
+    breadcrumb: "AI云平台竞品分析 → 算法研发与训练 → 推理服务 → 拼卡管理",
+    path: "算法研发与训练 > 推理服务 > 拼卡管理",
     textBefore: "NUMA亲和性未处理导致跨socket GPU通信延迟增加50%",
     highlight: "",
     textAfter: "",
@@ -64,8 +64,8 @@ export const searchResults: SearchResultItem[] = [
   },
   {
     title: "GPU调度策略",
-    breadcrumb: "AI云平台竞品分析 → 智算中心 → 推理服务 → GPU调度策略",
-    path: "智算中心 > 推理服务 > GPU调度策略",
+    breadcrumb: "AI云平台竞品分析 → 平台运维管控 → GPU管理 → GPU调度策略",
+    path: "平台运维管控 > GPU管理 > GPU调度策略",
     textBefore: "...",
     highlight: "拼卡",
     textAfter: "场景下调度器需感知NUMA拓扑...",
@@ -74,8 +74,8 @@ export const searchResults: SearchResultItem[] = [
   },
   {
     title: "调度器缺少拓扑感知能力",
-    breadcrumb: "AI云平台竞品分析 → 智算中心 → 推理服务 → GPU调度策略",
-    path: "智算中心 > 推理服务 > GPU调度策略",
+    breadcrumb: "AI云平台竞品分析 → 平台运维管控 → GPU管理 → GPU调度策略",
+    path: "平台运维管控 > GPU管理 > GPU调度策略",
     textBefore: "当前调度器不感知NUMA拓扑，GPU分配可能跨socket",
     highlight: "",
     textAfter: "",

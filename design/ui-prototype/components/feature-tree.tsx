@@ -105,7 +105,7 @@ function TreeItem({
 
 export function FeatureTree({ data, selectedId, onSelect }: FeatureTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    new Set(["private-cloud", "inference-service", "training-service", "smart-computing"])
+    new Set(["algorithm-training", "inference-service"])
   )
 
   const toggleExpand = (id: string) => {
