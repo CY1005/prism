@@ -99,7 +99,7 @@ export default function AnalysisPage() {
   const params = useParams()
   const projectId = params.id as string
   const [requirementText, setRequirementText] = useState("推理服务新增路由管理功能，支持基于权重的流量分配和灰度发布策略，需要在现有推理服务架构上扩展路由层。")
-  const [isAnalyzed, setIsAnalyzed] = useState(false)
+  const [isAnalyzed, setIsAnalyzed] = useState(true)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadedImages, setUploadedImages] = useState<UploadedFile[]>([])
