@@ -462,9 +462,9 @@ export default function ImportAIPage() {
           {/* Bottom Action Bar */}
           <div className="border-t border-border px-6 py-4 bg-card">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                确认后将进入导入进度页面（F15数据流转）
-              </p>
+              <Link href={`/projects/${projectId}/data-flow`} className="text-xs text-primary hover:underline">
+                确认后将进入导入进度页面
+              </Link>
               <div className="flex items-center gap-3">
                 <Button variant="outline" asChild>
                   <Link href={`/projects/${projectId}`}>取消</Link>

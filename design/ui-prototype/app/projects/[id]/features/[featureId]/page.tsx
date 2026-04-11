@@ -35,6 +35,7 @@ import { Card } from "@/components/ui/card"
 import { DimensionCard } from "@/components/dimension-card"
 import { VersionTimeline } from "@/components/version-timeline"
 import { treeData } from "@/lib/tree-data"
+import { ToastNotification } from "@/components/toast-notification"
 import {
   Table,
   TableBody,
@@ -462,6 +463,13 @@ export default function FeatureDetailPage() {
           </div>
         </ScrollArea>
       </main>
+
+      {/* Toast Notification */}
+      <ToastNotification
+        message="最近操作：已更新「创建推理服务」的技术实现维度 · 2分钟前"
+        linkText="查看数据流转"
+        linkHref={`/projects/${projectId}/data-flow`}
+      />
     </div>
   )
 }

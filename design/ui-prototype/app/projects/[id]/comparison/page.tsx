@@ -250,9 +250,14 @@ export default function ComparisonPage() {
           {aiGenerated && (
             <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4">
               <Info className="h-4 w-4 text-blue-500 shrink-0" />
-              <span className="text-sm text-blue-700">
-                AI已基于已有知识和联网搜索生成对比结果，请review后确认
-              </span>
+              <div className="flex flex-col gap-1">
+                <span className="text-sm text-blue-700">
+                  AI已基于已有知识和联网搜索生成对比结果，请review后确认
+                </span>
+                <span className="text-xs text-blue-600">
+                  对比结果可回填到各功能项的竞品参考卡片
+                </span>
+              </div>
             </div>
           )}
 

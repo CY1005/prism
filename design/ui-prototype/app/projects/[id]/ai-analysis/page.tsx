@@ -57,6 +57,7 @@ import {
   generatedTestPoints,
 } from "@/lib/ai-analysis-data"
 import type { TestPoint, AffectedModule } from "@/lib/ai-analysis-data"
+import { ToastNotification } from "@/components/toast-notification"
 
 function getSeverityColor(severity: string) {
   switch (severity) {
@@ -751,6 +752,15 @@ export default function AiAnalysisPage() {
           )}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {analysisLevel >= 1 && (
+        <ToastNotification
+          message="分析结果已保存到 推理服务/创建推理服务 的需求分析维度"
+          linkText="查看数据流转"
+          linkHref={`/projects/${projectId}/data-flow`}
+        />
+      )}
     </div>
   )
 }

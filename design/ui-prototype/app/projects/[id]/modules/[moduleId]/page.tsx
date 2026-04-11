@@ -17,6 +17,7 @@ import {
   Wrench,
   PenTool,
   Zap,
+  Upload,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -370,6 +371,13 @@ export default function ModuleOverviewPage() {
           {/* Feature List */}
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-medium">功能项列表</h3>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
+                <Link href={`/projects/${projectId}/import-ai`}>
+                  <Upload className="h-3.5 w-3.5" />
+                  导入
+                </Link>
+              </Button>
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
@@ -380,6 +388,7 @@ export default function ModuleOverviewPage() {
                 <SelectItem value="name">按名称</SelectItem>
               </SelectContent>
             </Select>
+            </div>
           </div>
 
           <Card className="border-border/60 shadow-sm overflow-hidden mb-6">

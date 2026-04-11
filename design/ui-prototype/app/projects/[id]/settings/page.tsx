@@ -456,9 +456,11 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
                 <div>
                   <h3 className="text-sm font-medium mb-2">导入</h3>
                   <p className="text-sm text-muted-foreground mb-4">上传 Markdown 或 zip 文件导入知识数据</p>
-                  <Button variant="outline">
-                    <Upload className="h-4 w-4 mr-2" />
-                    上传文件
+                  <Button variant="outline" asChild>
+                    <Link href={`/projects/${id}/import-ai`}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      上传文件
+                    </Link>
                   </Button>
                   <p className="text-xs text-muted-foreground mt-2">支持 Markdown (.md) / zip 格式</p>
                 </div>
