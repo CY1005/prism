@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
@@ -10,6 +11,12 @@ import {
   Settings,
   Shield,
   X,
+  Sparkles,
+  Loader2,
+  Pencil,
+  ArrowDownToLine,
+  Plus,
+  Info,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -41,6 +48,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { detailStrings } from "@/lib/project-detail-data"
 import { comparisonData } from "@/lib/comparison-data"
 import { cn } from "@/lib/utils"
@@ -54,6 +67,27 @@ function getCellHighlightClass(highlight: string | null) {
 export default function ComparisonPage() {
   const params = useParams()
   const projectId = params.id as string
+  const [aiGenerated, setAiGenerated] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [hoveredCell, setHoveredCell] = useState<string | null>(null)
+  const [customDimensions, setCustomDimensions] = useState<string[]>(
+    comparisonData.defaultDimensions
+  )
+
+  const handleAiGenerate = () => {
+    setAiLoading(true)
+    // Simulate AI generation delay
+    setTimeout(() => {
+      setAiLoading(false)
+      setAiGenerated(true)
+    }, 2000)
+  }
+
+  const handleAddDimension = () => {
+    setCustomDimensions(prev => [...prev, `自定义维度 ${prev.length + 1}`])
+  }
+
+  const tableData = aiGenerated ? comparisonData.aiGeneratedTable : comparisonData.comparisonTable
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -147,7 +181,26 @@ export default function ComparisonPage() {
         <div className="p-6">
           {/* Control Card */}
           <Card className="border-border/60 shadow-sm p-5 mb-6">
-            <h2 className="text-xl font-semibold">竞品对比</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">竞品对比</h2>
+              <Button
+                onClick={handleAiGenerate}
+                disabled={aiLoading}
+                className="gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    AI 生成中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    AI 生成对比
+                  </>
+                )}
+              </Button>
+            </div>
             <div className="flex gap-4 items-end mt-4">
               <div>
                 <Label className="text-sm mb-1 block">选择功能</Label>
@@ -176,55 +229,154 @@ export default function ComparisonPage() {
                 </div>
               </div>
               <Button variant="outline" size="sm">+ 添加竞品</Button>
-              <Button size="sm">生成对比</Button>
+              <Button size="sm" variant="outline">生成对比</Button>
+            </div>
+
+            {/* Dimension columns config */}
+            <div className="mt-4 pt-4 border-t border-border/60">
+              <Label className="text-sm mb-2 block">对比维度</Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {customDimensions.map((dim, i) => (
+                  <Badge key={i} variant="secondary" className="gap-1">
+                    {dim}
+                    <button
+                      className="hover:text-foreground"
+                      onClick={() => setCustomDimensions(prev => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={handleAddDimension}>
+                  <Plus className="h-3 w-3" />
+                  添加对比维度
+                </Button>
+              </div>
             </div>
           </Card>
+
+          {/* AI Generation Banner */}
+          {aiGenerated && (
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-4">
+              <Info className="h-4 w-4 text-blue-500 shrink-0" />
+              <span className="text-sm text-blue-700">
+                AI已基于已有知识和联网搜索生成对比结果，请review后确认
+              </span>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {aiLoading && (
+            <Card className="border-border/60 shadow-sm p-12 mb-6">
+              <div className="flex flex-col items-center justify-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">AI 正在分析竞品信息并生成对比结果...</p>
+              </div>
+            </Card>
+          )}
 
           {/* Comparison Table */}
-          <Card className="border-border/60 shadow-sm overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-medium w-28">对比维度</TableHead>
-                  <TableHead className="font-medium">本产品（私有云）</TableHead>
-                  <TableHead className="font-medium">AWS SageMaker</TableHead>
-                  <TableHead className="font-medium">阿里 PAI</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {comparisonData.comparisonTable.map((row, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">{row.dimension}</TableCell>
-                    <TableCell className={cn(getCellHighlightClass(row.ourProduct.highlight))}>
-                      {row.ourProduct.text}
-                    </TableCell>
-                    <TableCell className={cn(getCellHighlightClass(row.aws.highlight))}>
-                      {row.aws.text}
-                    </TableCell>
-                    <TableCell className={cn(getCellHighlightClass(row.aliyun.highlight))}>
-                      {row.aliyun.text}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          {!aiLoading && (
+            <TooltipProvider>
+              <Card className="border-border/60 shadow-sm overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-medium w-28">对比维度</TableHead>
+                      <TableHead className="font-medium">本产品（私有云）</TableHead>
+                      <TableHead className="font-medium">AWS SageMaker</TableHead>
+                      <TableHead className="font-medium">阿里 PAI</TableHead>
+                      {aiGenerated && <TableHead className="font-medium w-16">操作</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tableData.map((row, index) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">{row.dimension}</TableCell>
+                        <TableCell
+                          className={cn(
+                            getCellHighlightClass(row.ourProduct.highlight),
+                            "relative group"
+                          )}
+                          onMouseEnter={() => setHoveredCell(`${index}-our`)}
+                          onMouseLeave={() => setHoveredCell(null)}
+                        >
+                          {row.ourProduct.text}
+                          {hoveredCell === `${index}-our` && (
+                            <button className="absolute top-1 right-1 p-1 rounded hover:bg-muted">
+                              <Pencil className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            getCellHighlightClass(row.aws.highlight),
+                            "relative group"
+                          )}
+                          onMouseEnter={() => setHoveredCell(`${index}-aws`)}
+                          onMouseLeave={() => setHoveredCell(null)}
+                        >
+                          {row.aws.text}
+                          {hoveredCell === `${index}-aws` && (
+                            <button className="absolute top-1 right-1 p-1 rounded hover:bg-muted">
+                              <Pencil className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            getCellHighlightClass(row.aliyun.highlight),
+                            "relative group"
+                          )}
+                          onMouseEnter={() => setHoveredCell(`${index}-ali`)}
+                          onMouseLeave={() => setHoveredCell(null)}
+                        >
+                          {row.aliyun.text}
+                          {hoveredCell === `${index}-ali` && (
+                            <button className="absolute top-1 right-1 p-1 rounded hover:bg-muted">
+                              <Pencil className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                          )}
+                        </TableCell>
+                        {aiGenerated && (
+                          <TableCell>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <ArrowDownToLine className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>将此行结论同步到该功能项的竞品参考卡片</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </TooltipProvider>
+          )}
 
           {/* Conclusion Card */}
-          <Card className="border-border/60 shadow-sm p-5 mt-6">
-            <h3 className="font-medium mb-3">对比结论（AI 生成）</h3>
-            <div className="space-y-2 text-sm">
-              {comparisonData.conclusions.map((conclusion, index) => (
-                <p key={index}>
-                  <span className={conclusion.type === "advantage" ? "text-green-500" : "text-yellow-500"}>
-                    {conclusion.type === "advantage" ? "\u2705" : "\u26A0\uFE0F"}
-                  </span>{" "}
-                  {conclusion.type === "advantage" ? "优势：" : "劣势："}
-                  {conclusion.text}
-                </p>
-              ))}
-            </div>
-          </Card>
+          {!aiLoading && (
+            <Card className="border-border/60 shadow-sm p-5 mt-6">
+              <h3 className="font-medium mb-3">对比结论（AI 生成）</h3>
+              <div className="space-y-2 text-sm">
+                {comparisonData.conclusions.map((conclusion, index) => (
+                  <p key={index}>
+                    <span className={conclusion.type === "advantage" ? "text-green-500" : "text-yellow-500"}>
+                      {conclusion.type === "advantage" ? "\u2705" : "\u26A0\uFE0F"}
+                    </span>{" "}
+                    {conclusion.type === "advantage" ? "优势：" : "劣势："}
+                    {conclusion.text}
+                  </p>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       </ScrollArea>
     </div>

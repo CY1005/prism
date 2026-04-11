@@ -7,6 +7,25 @@ export interface FeatureItem {
   lastUpdate: string
 }
 
+export interface CompetitorRef {
+  id: string
+  name: string
+  version: string
+  coverage: "有" | "无" | "部分"
+  techSummary: string
+  prosConsSummary: string
+}
+
+export type IssueType = "bug" | "tech-debt" | "design-flaw" | "performance"
+
+export interface FeatureIssue {
+  id: string
+  type: IssueType
+  title: string
+  description: string
+  linkedDimension: string
+}
+
 export interface ModuleDetailData {
   id: string
   name: string
@@ -20,6 +39,8 @@ export interface ModuleDetailData {
     percent: number
   }[]
   features: FeatureItem[]
+  competitorRefs?: Record<string, CompetitorRef[]>
+  featureIssues?: Record<string, FeatureIssue[]>
 }
 
 export const moduleDetailData: Record<string, ModuleDetailData> = {
@@ -29,6 +50,51 @@ export const moduleDetailData: Record<string, ModuleDetailData> = {
     productLineName: "私有云",
     featureCount: 5,
     avgCompletion: 85,
+    competitorRefs: {
+      "create-inference": [
+        {
+          id: "cr-1",
+          name: "AWS SageMaker",
+          version: "v2.x",
+          coverage: "有",
+          techSummary: "Real-time Inference Endpoint",
+          prosConsSummary: "成熟稳定，生态丰富；但仅支持NVIDIA GPU，私有化部署受限",
+        },
+        {
+          id: "cr-2",
+          name: "Run:ai",
+          version: "v2.9",
+          coverage: "部分",
+          techSummary: "GPU共享推理",
+          prosConsSummary: "GPU虚拟化能力强，资源利用率高；但功能覆盖不完整，缺少模型管理",
+        },
+      ],
+    },
+    featureIssues: {
+      "create-inference": [
+        {
+          id: "issue-1",
+          type: "bug",
+          title: "多副本创建时GPU资源未释放",
+          description: "当创建多副本推理服务后删除部分副本，对应GPU资源未正确释放，导致资源泄漏",
+          linkedDimension: "测试分析",
+        },
+        {
+          id: "issue-2",
+          type: "tech-debt",
+          title: "推理服务创建接口缺少参数校验",
+          description: "创建接口对replica_count、gpu_memory等关键参数缺少边界值校验，可能导致非法配置",
+          linkedDimension: "工程经验",
+        },
+        {
+          id: "issue-3",
+          type: "design-flaw",
+          title: "服务名称不支持中文导致用户困惑",
+          description: "服务名称仅支持英文字母和数字，但多数用户习惯使用中文命名，缺少友好提示",
+          linkedDimension: "设计决策",
+        },
+      ],
+    },
     dimensions: [
       { name: "功能描述", current: 5, total: 5, percent: 100 },
       { name: "用户场景", current: 4, total: 5, percent: 80 },

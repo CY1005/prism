@@ -103,6 +103,9 @@ export default function ProjectOverviewPage() {
 
       <div className="flex items-center gap-6 border-b border-border px-6">
         <Link href={`/projects/${projectId}`} className="border-b-2 border-primary text-primary font-medium pb-3 pt-2 text-sm">
+          概览
+        </Link>
+        <Link href={`/projects/${projectId}/panorama`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           全景图
         </Link>
         <Link href={isOpenClaw ? `/openclaw` : `/projects/${projectId}/product-lines/private-cloud`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
@@ -116,6 +119,9 @@ export default function ProjectOverviewPage() {
         </Link>
         <Link href={`/projects/${projectId}/relation-graph`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           关系图
+        </Link>
+        <Link href={`/projects/${projectId}/feed`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          动态
         </Link>
         <Link href={`/projects/${projectId}/insights`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           行业动态

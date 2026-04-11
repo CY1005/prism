@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { use } from "react"
-import { Bell, UserPlus, LogOut, GripVertical, FileText, Users, Server, GitBranch, Lightbulb, TestTube, ClipboardList, Building, FileCode, Gauge, DollarSign, Folder, File } from "lucide-react"
+import { Bell, UserPlus, LogOut, GripVertical, FileText, Users, Server, GitBranch, Lightbulb, TestTube, ClipboardList, Building, FileCode, Gauge, DollarSign, Folder, File, Plus, Pencil, Trash2, Upload, Download, ChevronDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -39,7 +39,15 @@ import { ChevronRight } from "lucide-react"
 import { settingsStrings, settingsMembers } from "@/lib/settings-data"
 import { cn } from "@/lib/utils"
 
-type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai"
+const competitors = [
+  { name: "Run:ai", description: "GPU虚拟化与编排平台，专注于AI基础设施资源优化", featureCount: 24 },
+  { name: "AWS SageMaker", description: "AWS全托管机器学习平台，覆盖ML全生命周期", featureCount: 42 },
+  { name: "华为 ModelArts", description: "华为云一站式AI开发平台，面向企业级AI应用", featureCount: 36 },
+  { name: "阿里云 PAI", description: "阿里云机器学习平台，提供端到端AI工程化能力", featureCount: 31 },
+  { name: "Kubeflow", description: "基于Kubernetes的开源ML工作流平台", featureCount: 18 },
+]
+
+type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai" | "competitors" | "import-export"
 
 const enabledDimensions = [
   { id: "desc", name: "功能描述", description: "功能的核心说明", icon: FileText },
@@ -156,16 +164,38 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
           >
             {settingsStrings.memberManagement}
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab("ai")}
             className={cn(
               "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
-              activeTab === "ai" 
-                ? "bg-primary/10 text-primary font-medium" 
+              activeTab === "ai"
+                ? "bg-primary/10 text-primary font-medium"
                 : "text-muted-foreground hover:bg-muted"
             )}
           >
             {settingsStrings.aiConfig}
+          </button>
+          <button
+            onClick={() => setActiveTab("competitors")}
+            className={cn(
+              "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
+              activeTab === "competitors"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-muted"
+            )}
+          >
+            竞品管理
+          </button>
+          <button
+            onClick={() => setActiveTab("import-export")}
+            className={cn(
+              "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
+              activeTab === "import-export"
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-muted"
+            )}
+          >
+            导入/导出
           </button>
         </div>
 
@@ -363,6 +393,96 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
                   <Input type="password" placeholder="sk-..." />
                 </div>
                 <Button variant="default">{settingsStrings.saveConfig}</Button>
+              </div>
+            </div>
+          )}
+
+          {/* Competitors Tab */}
+          {activeTab === "competitors" && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold">竞品管理</h2>
+                  <p className="text-sm text-muted-foreground mt-1">全局竞品实体，可在竞品对比中引用</p>
+                </div>
+                <Button variant="default">
+                  <Plus className="h-4 w-4 mr-2" />
+                  添加竞品
+                </Button>
+              </div>
+
+              <div className="rounded-md border border-border overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead>竞品名称</TableHead>
+                      <TableHead>描述</TableHead>
+                      <TableHead className="w-24">功能项数</TableHead>
+                      <TableHead className="w-32">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {competitors.map((comp) => (
+                      <TableRow key={comp.name}>
+                        <TableCell className="font-medium">{comp.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{comp.description}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{comp.featureCount}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="flex items-center gap-2">
+                            <button className="text-muted-foreground hover:text-foreground">
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button className="text-muted-foreground hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {/* Import/Export Tab */}
+          {activeTab === "import-export" && (
+            <div>
+              <h2 className="text-lg font-semibold mb-6">导入/导出</h2>
+
+              <div className="space-y-8 max-w-lg">
+                <div>
+                  <h3 className="text-sm font-medium mb-2">导入</h3>
+                  <p className="text-sm text-muted-foreground mb-4">上传 Markdown 或 zip 文件导入知识数据</p>
+                  <Button variant="outline">
+                    <Upload className="h-4 w-4 mr-2" />
+                    上传文件
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">支持 Markdown (.md) / zip 格式</p>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="text-sm font-medium mb-2">导出</h3>
+                  <p className="text-sm text-muted-foreground mb-4">将项目知识导出为文件</p>
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline">
+                      <Download className="h-4 w-4 mr-2" />
+                      按模块导出
+                    </Button>
+                    <Button variant="outline">
+                      <Download className="h-4 w-4 mr-2" />
+                      整个项目导出
+                    </Button>
+                    <Button variant="outline">
+                      <Download className="h-4 w-4 mr-2" />
+                      导出为 zip
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

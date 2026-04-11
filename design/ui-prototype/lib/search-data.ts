@@ -1,43 +1,86 @@
 export const searchStrings = {
-  productLine: "\u4ea7\u54c1\u7ebf",
-  privateCloud: "\u79c1\u6709\u4e91",
-  smartComputing: "\u667a\u7b97\u4e2d\u5fc3",
-  moduleLabel: "\u6a21\u5757",
-  inferenceService: "\u63a8\u7406\u670d\u52a1",
-  trainingService: "\u8bad\u7ec3\u670d\u52a1",
-  dimensionType: "\u7ef4\u5ea6\u7c7b\u578b",
-  engineeringExp: "\u5de5\u7a0b\u7ecf\u9a8c",
-  techImpl: "\u6280\u672f\u5b9e\u73b0",
-  designDecision: "\u8bbe\u8ba1\u51b3\u7b56",
-  resultsFound: "\u627e\u5230 3 \u6761\u7ed3\u679c",
-  funcDescription: "\u529f\u80fd\u63cf\u8ff0",
-  userName: "\u9648\u7396",
-  userInitials: "\u9648",
+  productLine: "产品线",
+  privateCloud: "私有云",
+  smartComputing: "智算中心",
+  moduleLabel: "模块",
+  inferenceService: "推理服务",
+  trainingService: "训练服务",
+  dimensionType: "维度类型",
+  engineeringExp: "工程经验",
+  techImpl: "技术实现",
+  designDecision: "设计决策",
+  resultsFound: "找到 5 条结果",
+  funcDescription: "功能描述",
+  userName: "陈琦",
+  userInitials: "陈",
 }
 
-export const searchResults = [
+export type SearchResultType = "feature" | "dimension" | "issue"
+export type IssueKind = "bug" | "技术债" | "设计缺陷" | "性能"
+
+export interface SearchResultItem {
+  title: string
+  breadcrumb: string
+  path: string
+  textBefore: string
+  highlight: string
+  textAfter: string
+  badge: string
+  type: SearchResultType
+  issueKind?: IssueKind
+}
+
+export const searchResults: SearchResultItem[] = [
   {
-    title: "\u62fc\u5361\u7ba1\u7406",
-    path: "\u79c1\u6709\u4e91 > \u63a8\u7406\u670d\u52a1 > \u62fc\u5361\u7ba1\u7406",
-    textBefore: "...\u652f\u6301\u591a\u5757GPU",
-    highlight: "\u62fc\u5361",
-    textAfter: "\u7ec4\u6210\u865a\u62df\u5927\u663e\u5b58...",
-    badge: "\u529f\u80fd\u63cf\u8ff0",
+    title: "拼卡管理",
+    breadcrumb: "AI云平台竞品分析 → 私有云 → 推理服务 → 拼卡管理",
+    path: "私有云 > 推理服务 > 拼卡管理",
+    textBefore: "...支持多块GPU",
+    highlight: "拼卡",
+    textAfter: "组成虚拟大显存...",
+    badge: "功能描述",
+    type: "feature",
   },
   {
-    title: "\u521b\u5efa\u63a8\u7406\u670d\u52a1",
-    path: "\u79c1\u6709\u4e91 > \u63a8\u7406\u670d\u52a1 > \u521b\u5efa\u63a8\u7406\u670d\u52a1",
-    textBefore: "...NUMA\u4eb2\u548c\u6027\u95ee\u9898\uff1a",
-    highlight: "\u62fc\u5361",
-    textAfter: "\u540e\u63a8\u7406\u5ef6\u8fdf\u53cd\u800c\u589e\u5927...",
-    badge: "\u5de5\u7a0b\u7ecf\u9a8c",
+    title: "创建推理服务",
+    breadcrumb: "AI云平台竞品分析 → 私有云 → 推理服务 → 创建推理服务",
+    path: "私有云 > 推理服务 > 创建推理服务",
+    textBefore: "...NUMA亲和性问题：",
+    highlight: "拼卡",
+    textAfter: "后推理延迟反而增大...",
+    badge: "工程经验",
+    type: "dimension",
   },
   {
-    title: "GPU\u8c03\u5ea6\u7b56\u7565",
-    path: "\u667a\u7b97\u4e2d\u5fc3 > \u63a8\u7406\u670d\u52a1 > GPU\u8c03\u5ea6\u7b56\u7565",
+    title: "GPU拼卡后推理延迟增大",
+    breadcrumb: "AI云平台竞品分析 → 私有云 → 推理服务 → 拼卡管理",
+    path: "私有云 > 推理服务 > 拼卡管理",
+    textBefore: "NUMA亲和性未处理导致跨socket GPU通信延迟增加50%",
+    highlight: "",
+    textAfter: "",
+    badge: "bug",
+    type: "issue",
+    issueKind: "bug",
+  },
+  {
+    title: "GPU调度策略",
+    breadcrumb: "AI云平台竞品分析 → 智算中心 → 推理服务 → GPU调度策略",
+    path: "智算中心 > 推理服务 > GPU调度策略",
     textBefore: "...",
-    highlight: "\u62fc\u5361",
-    textAfter: "\u573a\u666f\u4e0b\u8c03\u5ea6\u5668\u9700\u611f\u77e5NUMA\u62d3\u6251...",
-    badge: "\u6280\u672f\u5b9e\u73b0",
+    highlight: "拼卡",
+    textAfter: "场景下调度器需感知NUMA拓扑...",
+    badge: "技术实现",
+    type: "dimension",
+  },
+  {
+    title: "调度器缺少拓扑感知能力",
+    breadcrumb: "AI云平台竞品分析 → 智算中心 → 推理服务 → GPU调度策略",
+    path: "智算中心 > 推理服务 > GPU调度策略",
+    textBefore: "当前调度器不感知NUMA拓扑，GPU分配可能跨socket",
+    highlight: "",
+    textAfter: "",
+    badge: "技术债",
+    type: "issue",
+    issueKind: "技术债",
   },
 ]

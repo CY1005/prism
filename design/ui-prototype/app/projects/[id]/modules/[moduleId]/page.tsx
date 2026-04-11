@@ -10,6 +10,13 @@ import {
   LogOut,
   Settings,
   Shield,
+  Plus,
+  Pencil,
+  Trash2,
+  Bug,
+  Wrench,
+  PenTool,
+  Zap,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,6 +25,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
 import {
   Select,
   SelectContent,
@@ -42,7 +50,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 
-import { moduleDetailData } from "@/lib/module-data"
+import { moduleDetailData, type IssueType } from "@/lib/module-data"
 import { detailStrings } from "@/lib/project-detail-data"
 import { cn } from "@/lib/utils"
 
@@ -57,11 +65,62 @@ function getStatusDotColor(status: "green" | "yellow" | "red") {
   }
 }
 
+function getCoverageColor(coverage: "有" | "无" | "部分") {
+  switch (coverage) {
+    case "有":
+      return "bg-green-100 text-green-700"
+    case "无":
+      return "bg-red-100 text-red-700"
+    case "部分":
+      return "bg-yellow-100 text-yellow-700"
+  }
+}
+
+function getIssueIcon(type: IssueType) {
+  switch (type) {
+    case "bug":
+      return <Bug className="h-4 w-4 text-red-500" />
+    case "tech-debt":
+      return <Wrench className="h-4 w-4 text-orange-500" />
+    case "design-flaw":
+      return <PenTool className="h-4 w-4 text-purple-500" />
+    case "performance":
+      return <Zap className="h-4 w-4 text-blue-500" />
+  }
+}
+
+function getIssueTypeLabel(type: IssueType) {
+  switch (type) {
+    case "bug":
+      return "Bug"
+    case "tech-debt":
+      return "技术债"
+    case "design-flaw":
+      return "设计缺陷"
+    case "performance":
+      return "性能"
+  }
+}
+
+function getIssueTypeBadgeClass(type: IssueType) {
+  switch (type) {
+    case "bug":
+      return "bg-red-50 text-red-700 border-red-200"
+    case "tech-debt":
+      return "bg-orange-50 text-orange-700 border-orange-200"
+    case "design-flaw":
+      return "bg-purple-50 text-purple-700 border-purple-200"
+    case "performance":
+      return "bg-blue-50 text-blue-700 border-blue-200"
+  }
+}
+
 export default function ModuleOverviewPage() {
   const params = useParams()
   const projectId = params.id as string
   const moduleId = params.moduleId as string
   const [sortBy, setSortBy] = useState("completion")
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null)
 
   const moduleData = moduleDetailData[moduleId] || moduleDetailData["inference-service"]
 
@@ -77,6 +136,16 @@ export default function ModuleOverviewPage() {
         return 0
     }
   })
+
+  // Get competitor refs and issues for selected feature
+  const competitorRefs = selectedFeatureId && moduleData.competitorRefs
+    ? moduleData.competitorRefs[selectedFeatureId] || []
+    : []
+  const featureIssues = selectedFeatureId && moduleData.featureIssues
+    ? moduleData.featureIssues[selectedFeatureId] || []
+    : []
+
+  const selectedFeature = moduleData.features.find(f => f.id === selectedFeatureId)
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -204,7 +273,7 @@ export default function ModuleOverviewPage() {
             </Select>
           </div>
 
-          <Card className="border-border/60 shadow-sm overflow-hidden">
+          <Card className="border-border/60 shadow-sm overflow-hidden mb-6">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
@@ -217,11 +286,23 @@ export default function ModuleOverviewPage() {
               </TableHeader>
               <TableBody>
                 {sortedFeatures.map((feature) => (
-                  <TableRow key={feature.id}>
+                  <TableRow
+                    key={feature.id}
+                    className={cn(
+                      "cursor-pointer transition-colors",
+                      selectedFeatureId === feature.id && "bg-primary/5"
+                    )}
+                    onClick={() => setSelectedFeatureId(
+                      selectedFeatureId === feature.id ? null : feature.id
+                    )}
+                  >
                     <TableCell>
-                      <Link href="/" className="text-primary hover:underline">
+                      <span className={cn(
+                        "font-medium",
+                        selectedFeatureId === feature.id ? "text-primary" : "text-foreground"
+                      )}>
                         {feature.name}
-                      </Link>
+                      </span>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{feature.version}</Badge>
@@ -248,6 +329,128 @@ export default function ModuleOverviewPage() {
               </TableBody>
             </Table>
           </Card>
+
+          {/* F6: Competitor Reference Card */}
+          {selectedFeatureId && (
+            <Card className="border-border/60 shadow-sm p-5 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-medium">
+                  竞品参考
+                  {selectedFeature && (
+                    <span className="text-muted-foreground font-normal ml-2 text-sm">
+                      - {selectedFeature.name}
+                    </span>
+                  )}
+                </h3>
+                <Button variant="outline" size="sm">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  添加
+                </Button>
+              </div>
+
+              {competitorRefs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  暂无竞品参考数据，点击"添加"按钮开始录入
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {competitorRefs.map((ref) => (
+                    <div
+                      key={ref.id}
+                      className="border border-border/60 rounded-lg p-4 hover:border-border transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{ref.name}</span>
+                          <Badge variant="outline" className="text-xs">{ref.version}</Badge>
+                          <Badge className={cn("text-xs", getCoverageColor(ref.coverage))}>
+                            功能覆盖: {ref.coverage}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">技术方案: </span>
+                          <span>{ref.techSummary}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">优劣势: </span>
+                          <span>{ref.prosConsSummary}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* F7: Issue Panel */}
+          {selectedFeatureId && (
+            <Card className="border-border/60 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-medium">
+                  关联问题
+                  {selectedFeature && (
+                    <span className="text-muted-foreground font-normal ml-2 text-sm">
+                      - {selectedFeature.name}
+                    </span>
+                  )}
+                  {featureIssues.length > 0 && (
+                    <Badge variant="secondary" className="ml-2">{featureIssues.length}</Badge>
+                  )}
+                </h3>
+                <Button variant="outline" size="sm">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  添加问题
+                </Button>
+              </div>
+
+              {featureIssues.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  暂无关联问题
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {featureIssues.map((issue) => (
+                    <div
+                      key={issue.id}
+                      className="flex items-start gap-3 border border-border/60 rounded-lg p-3 hover:border-border transition-colors"
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        {getIssueIcon(issue.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">{issue.title}</span>
+                          <Badge
+                            variant="outline"
+                            className={cn("text-xs", getIssueTypeBadgeClass(issue.type))}
+                          >
+                            {getIssueTypeLabel(issue.type)}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-1">
+                          {issue.description}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-xs shrink-0">
+                        {issue.linkedDimension}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       </ScrollArea>
     </div>
