@@ -123,6 +123,11 @@ export default function ModuleOverviewPage() {
   const moduleId = params.moduleId as string
   const [sortBy, setSortBy] = useState("completion")
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createType, setCreateType] = useState<"product-line" | "module" | "feature">("module")
+  const [createName, setCreateName] = useState("")
+  const [showContextMenu, setShowContextMenu] = useState(false)
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
 
   const moduleData = moduleDetailData[moduleId] || moduleDetailData["inference-service"]
 
@@ -239,9 +244,18 @@ export default function ModuleOverviewPage() {
       {/* Main Layout: Left Tree + Right Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Feature Tree */}
-        <div className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto">
-          <div className="p-3 border-b border-border">
+        <div className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto"
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setContextMenuPos({ x: e.clientX, y: e.clientY })
+            setShowContextMenu(true)
+          }}
+        >
+          <div className="p-3 border-b border-border flex items-center justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">功能树</h3>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setCreateType("module"); setShowCreateModal(true) }}>
+              <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
           </div>
           <FeatureTree
             data={treeData}
@@ -249,6 +263,86 @@ export default function ModuleOverviewPage() {
             onSelect={(id) => setSelectedFeatureId(id === selectedFeatureId ? null : id)}
           />
         </div>
+
+        {/* Right-click Context Menu */}
+        {showContextMenu && (
+          <div
+            className="fixed z-50 bg-card border border-border rounded-md shadow-lg py-1 w-44"
+            style={{ top: contextMenuPos.y, left: contextMenuPos.x }}
+            onClick={() => setShowContextMenu(false)}
+            onMouseLeave={() => setShowContextMenu(false)}
+          >
+            <button className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted" onClick={() => { setCreateType("product-line"); setShowCreateModal(true) }}>
+              新建产品线
+            </button>
+            <button className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted" onClick={() => { setCreateType("module"); setShowCreateModal(true) }}>
+              新建模块
+            </button>
+            <button className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted" onClick={() => { setCreateType("feature"); setShowCreateModal(true) }}>
+              新建功能项
+            </button>
+            <Separator className="my-1" />
+            <button className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted">重命名</button>
+            <button className="w-full text-left px-3 py-1.5 text-sm hover:bg-muted text-red-600">删除</button>
+          </div>
+        )}
+
+        {/* Create Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowCreateModal(false)}>
+            <Card className="w-[420px] p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-lg font-semibold mb-4">
+                {createType === "product-line" ? "新建产品线" : createType === "module" ? "新建模块" : "新建功能项"}
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-1.5 block">名称</label>
+                  <Input
+                    placeholder={createType === "product-line" ? "如：私有云、公有云、智算中心" : createType === "module" ? "如：推理服务、训练服务" : "如：创建推理服务、自动扩缩容"}
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                  />
+                </div>
+                {createType !== "product-line" && (
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">
+                      {createType === "module" ? "所属产品线" : "所属模块"}
+                    </label>
+                    <Select defaultValue={createType === "module" ? "private-cloud" : "inference-service"}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {createType === "module" ? (
+                          <>
+                            <SelectItem value="private-cloud">私有云</SelectItem>
+                            <SelectItem value="smart-computing">智算中心</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="inference-service">推理服务</SelectItem>
+                            <SelectItem value="training-service">训练服务</SelectItem>
+                            <SelectItem value="ops-management">运维管理</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {createType === "feature" && (
+                  <div>
+                    <label className="text-sm font-medium mb-1.5 block">引入版本</label>
+                    <Input placeholder="如：v3.9.5" />
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => { setShowCreateModal(false); setCreateName("") }}>取消</Button>
+                  <Button onClick={() => { setShowCreateModal(false); setCreateName("") }}>创建</Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Right Content */}
         <ScrollArea className="flex-1">

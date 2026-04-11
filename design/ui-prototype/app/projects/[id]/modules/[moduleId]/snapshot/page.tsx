@@ -47,6 +47,8 @@ import {
 
 import { snapshotData } from "@/lib/snapshot-data"
 import { detailStrings } from "@/lib/project-detail-data"
+import { treeData } from "@/lib/tree-data"
+import { FeatureTree } from "@/components/feature-tree"
 
 export default function SnapshotPage() {
   const params = useParams()
@@ -158,11 +160,21 @@ export default function SnapshotPage() {
         </Link>
       </div>
 
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="flex gap-6 p-6">
-          {/* Main Content */}
-          <div className="flex-1 max-w-3xl">
+      {/* Main Layout: Left Tree + Right Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar: Feature Tree */}
+        <div className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto">
+          <div className="p-3 border-b border-border">
+            <h3 className="text-sm font-medium text-muted-foreground">功能树</h3>
+          </div>
+          <FeatureTree data={treeData} selectedId={moduleId} onSelect={() => {}} />
+        </div>
+
+        {/* Right Content */}
+        <ScrollArea className="flex-1">
+          <div className="flex gap-6 p-6">
+            {/* Main Content */}
+            <div className="flex-1 max-w-3xl">
             {/* Feature Info Bar */}
             <Card className="border-border/60 shadow-sm p-4 mb-6">
               <div className="flex items-center justify-between">
@@ -345,8 +357,9 @@ export default function SnapshotPage() {
               </div>
             </div>
           </Card>
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   )
 }

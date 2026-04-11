@@ -42,6 +42,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { detailStrings } from "@/lib/project-detail-data"
+import { treeData } from "@/lib/tree-data"
+import { FeatureTree } from "@/components/feature-tree"
 import {
   aiAnalysisStrings,
   l1Findings,
@@ -118,6 +120,7 @@ export default function AiAnalysisPage() {
   const [testPoints, setTestPoints] = useState<TestPoint[]>(generatedTestPoints)
   const [isGeneratingTests, setIsGeneratingTests] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedTreeId, setSelectedTreeId] = useState("create-inference")
 
   const hasContent = requirementText.trim() || uploadedFile
 
@@ -265,7 +268,15 @@ export default function AiAnalysisPage() {
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Input + Results */}
+        {/* Left Sidebar: Feature Tree */}
+        <div className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto">
+          <div className="p-3 border-b border-border">
+            <h3 className="text-sm font-medium text-muted-foreground">功能树</h3>
+          </div>
+          <FeatureTree data={treeData} selectedId={selectedTreeId} onSelect={setSelectedTreeId} />
+        </div>
+
+        {/* Middle: Input + Results */}
         <div className="flex-1 flex flex-col border-r border-border">
           {/* Input Area */}
           <div className="p-6 border-b border-border">

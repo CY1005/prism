@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
@@ -27,6 +28,8 @@ import {
 } from "@/components/ui/breadcrumb"
 import { productLinesData } from "@/lib/product-line-data"
 import { detailStrings } from "@/lib/project-detail-data"
+import { treeData } from "@/lib/tree-data"
+import { FeatureTree } from "@/components/feature-tree"
 import { cn } from "@/lib/utils"
 
 function getStatusColor(percent: number) {
@@ -46,6 +49,7 @@ export default function ProductLineOverviewPage() {
   const params = useParams()
   const projectId = params.id as string
   const plId = params.plId as string
+  const [selectedTreeId, setSelectedTreeId] = useState(plId)
 
   const productLine = productLinesData[plId] || productLinesData["private-cloud"]
 
@@ -130,9 +134,19 @@ export default function ProductLineOverviewPage() {
         </Link>
       </div>
 
-      {/* Main Content */}
-      <ScrollArea className="flex-1">
-        <div className="max-w-4xl mx-auto p-6">
+      {/* Main Layout: Left Tree + Right Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar: Feature Tree */}
+        <div className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto">
+          <div className="p-3 border-b border-border">
+            <h3 className="text-sm font-medium text-muted-foreground">功能树</h3>
+          </div>
+          <FeatureTree data={treeData} selectedId={selectedTreeId} onSelect={setSelectedTreeId} />
+        </div>
+
+        {/* Right Content */}
+        <ScrollArea className="flex-1">
+          <div className="max-w-4xl mx-auto p-6">
           {/* Stats Cards */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             <Card className="border-border/60 p-4 shadow-sm">
@@ -192,7 +206,8 @@ export default function ProductLineOverviewPage() {
             ))}
           </div>
         </div>
-      </ScrollArea>
+        </ScrollArea>
+      </div>
     </div>
   )
 }
