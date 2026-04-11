@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { ChevronRight, Folder, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -104,13 +104,9 @@ function TreeItem({
 }
 
 export function FeatureTree({ data, selectedId, onSelect }: FeatureTreeProps) {
-  const [mounted, setMounted] = useState(false)
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    setExpandedIds(new Set(["private-cloud", "inference-service", "training-service", "smart-computing"]))
-    setMounted(true)
-  }, [])
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    new Set(["private-cloud", "inference-service", "training-service", "smart-computing"])
+  )
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -122,10 +118,6 @@ export function FeatureTree({ data, selectedId, onSelect }: FeatureTreeProps) {
       }
       return next
     })
-  }
-
-  if (!mounted) {
-    return <div className="space-y-1 py-2" />
   }
 
   return (
