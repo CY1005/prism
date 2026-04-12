@@ -10,7 +10,7 @@ import {
   projectMembers,
   users,
 } from "@/db/schema";
-import { eq, count, and } from "drizzle-orm";
+import { eq, count, and, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
@@ -22,15 +22,19 @@ export async function getProjects() {
   const user = await requireAuth();
 
   // 平台管理员看所有项目，普通用户只看自己有权限的
+  // F2 AC6: 已软删除的项目不在列表中显示
   let projectList;
   if (user.role === "platform_admin") {
-    projectList = await db.select().from(projects);
+    projectList = await db
+      .select()
+      .from(projects)
+      .where(isNull(projects.deletedAt));
   } else {
     projectList = await db
       .select({ project: projects })
       .from(projects)
       .innerJoin(projectMembers, eq(projects.id, projectMembers.projectId))
-      .where(eq(projectMembers.userId, user.id))
+      .where(and(eq(projectMembers.userId, user.id), isNull(projects.deletedAt)))
       .then((rows) => rows.map((r) => r.project));
   }
 
@@ -316,7 +320,7 @@ export async function getMyProjectRole(
 export async function updateProjectAIConfig(
   projectId: string,
   provider: string,
-  apiKeyEnc: string | null,
+  apiKeyPlain: string | null,
 ): Promise<ActionResult> {
   try {
     const user = await requireAuth();
@@ -327,11 +331,24 @@ export async function updateProjectAIConfig(
       return actionError(new AppError("无效的AI提供商", "blocking", "VALIDATION_ERROR"));
     }
 
+    // Bug #7 fix: encrypt API key before storing
+    let encryptedKey: string | null = null;
+    if (apiKeyPlain) {
+      try {
+        const { encryptApiKey } = await import("@/lib/crypto");
+        encryptedKey = encryptApiKey(apiKeyPlain);
+      } catch {
+        // If encryption secret not configured, store null and warn
+        logger.warn("project.updateAIConfig", { reason: "encryption_key_not_configured" });
+        return actionError(new AppError("加密密钥未配置，无法保存API Key", "blocking", "VALIDATION_ERROR"));
+      }
+    }
+
     await db
       .update(projects)
       .set({
         aiProvider: provider,
-        aiApiKeyEnc: apiKeyEnc,
+        aiApiKeyEnc: encryptedKey,
         updatedAt: new Date(),
       })
       .where(eq(projects.id, projectId));

@@ -53,8 +53,12 @@ class Project(Base):
     name = Column(Text, nullable=False)
     description = Column(Text)
     template_type = Column(Text, nullable=False, default="custom")
-    # hierarchy_labels, version_mode, ai_provider, ai_api_key_enc, created_by
-    # may not exist yet (migration pending)
+    hierarchy_labels = Column(JSONB, nullable=False, default=["层级1", "层级2", "层级3"])
+    version_mode = Column(Text, nullable=False, default="release")
+    ai_provider = Column(Text, default="local")
+    ai_api_key_enc = Column(Text)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    deleted_at = Column(DateTime)  # F2 AC15-18: soft delete
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 
@@ -69,6 +73,18 @@ class ProjectMember(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(Text, nullable=False, default="viewer")
+    scope = Column(Text, nullable=False, default="project")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(Text, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 
 

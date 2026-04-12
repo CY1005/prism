@@ -89,10 +89,10 @@ async function seed() {
     },
     {
       key: "research_platform",
-      name: "研究平台项目",
-      description: "适合数据产品和研究工具项目",
-      hierarchyLabels: ["应用层", "模块", "功能"],
-      dimensionKeys: ["description", "user_scenario", "design_decision", "engineering_exp", "quality_metric", "cost_analysis", "test_analysis"],
+      name: "开源项目研究",
+      description: "适合研究和对标开源项目",
+      hierarchyLabels: ["领域", "项目", "模块"],
+      dimensionKeys: ["description", "user_scenario", "tech_impl", "design_decision", "engineering_exp", "competitive_ref", "test_analysis"],
     },
     {
       key: "custom",

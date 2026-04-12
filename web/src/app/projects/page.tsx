@@ -11,6 +11,7 @@ import { projectsData, projectsStrings } from "@/lib/projects-data"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { listProjects, type ProjectSummary } from "@/services/projects"
+import { logout, getSessionUser } from "@/actions/auth"
 
 const typeColorMap: Record<string, string> = {
   blue: "border-blue-200 text-blue-700 bg-blue-50",
@@ -35,12 +36,24 @@ const templateColor: Record<string, string> = {
 
 export default function ProjectsPage() {
   const [apiProjects, setApiProjects] = useState<ProjectSummary[] | null>(null)
+  const [userName, setUserName] = useState("")
+  const [userInitials, setUserInitials] = useState("")
 
   useEffect(() => {
     listProjects().then((r) => {
       if (r.ok && r.data.projects.length > 0) setApiProjects(r.data.projects)
     })
+    getSessionUser().then((user) => {
+      if (user) {
+        setUserName(user.name)
+        setUserInitials(user.name.charAt(0))
+      }
+    })
   }, [])
+
+  const handleLogout = async () => {
+    await logout()
+  }
 
   // Use API data if available, otherwise mock
   const displayProjects = apiProjects
@@ -69,29 +82,33 @@ export default function ProjectsPage() {
           <Input placeholder={projectsStrings.searchPlaceholder} className="pl-9 cursor-pointer" readOnly />
         </Link>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href="/admin"><Shield className="h-4 w-4 text-muted-foreground" /></Link>
-          </Button>
+          <Link href="/admin">
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </Link>
           <Button variant="ghost" size="icon" className="h-8 w-8">
             <Bell className="h-4 w-4 text-muted-foreground" />
           </Button>
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{projectsStrings.userInitials}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-foreground">{projectsStrings.userName}</span>
+            <span className="text-sm text-foreground">{userName}</span>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href="/login"><LogOut className="h-4 w-4 text-muted-foreground" /></Link>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 text-muted-foreground" />
           </Button>
         </div>
       </header>
 
       <div className="flex items-center justify-between px-6 py-4">
         <h1 className="text-xl font-semibold text-foreground">{projectsStrings.myProjects}</h1>
-        <Button variant="default" asChild>
-          <Link href="/projects/new"><Plus className="mr-2 h-4 w-4" />{projectsStrings.newProject}</Link>
-        </Button>
+        <Link href="/projects/new">
+          <Button variant="default">
+            <Plus className="mr-2 h-4 w-4" />{projectsStrings.newProject}
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-4 px-6">

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { use } from "react"
-import { Bell, UserPlus, LogOut, GripVertical, FileText, Users, Server, GitBranch, Lightbulb, TestTube, ClipboardList, Building, FileCode, Gauge, DollarSign, Folder, File } from "lucide-react"
+import { Bell, UserPlus, LogOut, GripVertical, Folder, File } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -45,33 +45,15 @@ import {
   removeProjectMember,
   updateProjectAIConfig,
 } from "@/actions/projects"
+import {
+  getProjectDimensionConfigs,
+  updateDimensionConfig,
+  type DimensionConfigRow,
+} from "@/actions/project-settings"
+import { logout, getSessionUser } from "@/actions/auth"
 import { useProjectRole } from "@/contexts/project-role-context"
 
 type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai"
-
-const settingsStrings = {
-  myProjects: "我的项目",
-  settings: "设置",
-  basicInfo: "基本信息",
-  memberManagement: "成员管理",
-  aiConfig: "AI配置",
-  inviteMember: "邀请成员",
-  avatar: "头像",
-  username: "用户名",
-  email: "邮箱",
-  role: "角色",
-  action: "操作",
-  admin: "管理员",
-  editor: "编辑者",
-  viewer: "查看者",
-  editRole: "修改角色",
-  remove: "移除",
-  aiProvider: "AI Provider",
-  localMode: "本地模式",
-  saveConfig: "保存配置",
-  userName: "陈琦",
-  userInitials: "陈",
-}
 
 type ProjectData = {
   id: string
@@ -93,24 +75,6 @@ type MemberData = {
   userEmail: string
 }
 
-const enabledDimensions = [
-  { id: "desc", name: "功能描述", description: "功能的核心说明", icon: FileText },
-  { id: "user", name: "用户场景", description: "谁在什么场景下使用", icon: Users },
-  { id: "tech", name: "技术实现", description: "平台侧的技术方案", icon: Server },
-  { id: "decision", name: "设计决策", description: "关键架构决策及取舍", icon: GitBranch },
-  { id: "exp", name: "工程经验", description: "踩坑记录与最佳实践", icon: Lightbulb },
-  { id: "test", name: "测试分析", description: "测试策略与问题记录", icon: TestTube },
-  { id: "req", name: "需求分析", description: "需求拆解与影响范围", icon: ClipboardList },
-  { id: "comp", name: "竞品参考", description: "竞品功能对标分析", icon: Building },
-]
-
-const disabledDimensions = [
-  { id: "api", name: "接口规范", description: "API接口与协议定义", icon: FileCode },
-  { id: "deploy", name: "部署配置", description: "部署架构与运维配置", icon: Server },
-  { id: "quality", name: "质量指标", description: "准确率、延迟等量化指标", icon: Gauge },
-  { id: "cost", name: "成本分析", description: "资源成本与ROI分析", icon: DollarSign },
-]
-
 const ROLE_BADGE: Record<string, { label: string; variant: string }> = {
   admin: { label: "管理员", variant: "default" },
   editor: { label: "编辑者", variant: "green" },
@@ -123,6 +87,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
   const [activeTab, setActiveTab] = useState<TabType>("dimensions")
   const [project, setProject] = useState<ProjectData | null>(null)
   const [members, setMembers] = useState<MemberData[]>([])
+  const [dimensionConfigs, setDimensionConfigs] = useState<DimensionConfigRow[]>([])
   const [projectName, setProjectName] = useState("")
   const [projectDescription, setProjectDescription] = useState("")
   const [level1, setLevel1] = useState("产品线")
@@ -133,6 +98,8 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("viewer")
   const [saving, setSaving] = useState(false)
+  const [userName, setUserName] = useState("")
+  const [userInitials, setUserInitials] = useState("")
 
   useEffect(() => {
     getProject(projectId).then((p) => {
@@ -150,6 +117,13 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
       }
     })
     loadMembers()
+    loadDimensions()
+    getSessionUser().then((user) => {
+      if (user) {
+        setUserName(user.name)
+        setUserInitials(user.name.charAt(0))
+      }
+    })
   }, [projectId])
 
   const loadMembers = async () => {
@@ -159,6 +133,34 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     } catch {
       // ignore
     }
+  }
+
+  const loadDimensions = async () => {
+    try {
+      const configs = await getProjectDimensionConfigs(projectId)
+      setDimensionConfigs(configs)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleToggleDimension = (configId: number, enabled: boolean) => {
+    setDimensionConfigs((prev) =>
+      prev.map((c) => (c.configId === configId ? { ...c, enabled } : c))
+    )
+  }
+
+  const handleSaveDimensions = async () => {
+    setSaving(true)
+    await updateDimensionConfig(
+      projectId,
+      dimensionConfigs.map((c, i) => ({
+        dimensionTypeId: c.dimensionTypeId,
+        enabled: c.enabled,
+        sortOrder: i,
+      })),
+    )
+    setSaving(false)
   }
 
   const handleSaveBasic = async () => {
@@ -175,7 +177,9 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
 
   const handleSaveAI = async () => {
     setSaving(true)
+    // Pass raw key — server action handles encryption
     await updateProjectAIConfig(projectId, aiProvider, aiApiKey || null)
+    setAiApiKey("")
     setSaving(false)
   }
 
@@ -196,6 +200,13 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     await loadMembers()
   }
 
+  const handleLogout = async () => {
+    await logout()
+  }
+
+  const enabledDims = dimensionConfigs.filter((c) => c.enabled)
+  const disabledDims = dimensionConfigs.filter((c) => !c.enabled)
+
   return (
     <div className="min-h-screen bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card px-6">
@@ -206,14 +217,12 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
           </Button>
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{settingsStrings.userInitials}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-foreground">{settingsStrings.userName}</span>
+            <span className="text-sm text-foreground">{userName}</span>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href="/login">
-              <LogOut className="h-4 w-4 text-muted-foreground" />
-            </Link>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
+            <LogOut className="h-4 w-4 text-muted-foreground" />
           </Button>
         </div>
       </header>
@@ -222,7 +231,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/projects">{settingsStrings.myProjects}</BreadcrumbLink>
+              <BreadcrumbLink href="/projects">我的项目</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
@@ -234,7 +243,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbPage>{settingsStrings.settings}</BreadcrumbPage>
+              <BreadcrumbPage>设置</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -242,68 +251,36 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
 
       <div className="flex">
         <div className="w-[200px] border-r border-border p-4 space-y-1">
-          <button
-            onClick={() => setActiveTab("basic")}
-            className={cn(
-              "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
-              activeTab === "basic"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {settingsStrings.basicInfo}
-          </button>
-          <button
-            onClick={() => setActiveTab("dimensions")}
-            className={cn(
-              "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
-              activeTab === "dimensions"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            维度管理
-          </button>
-          <button
-            onClick={() => setActiveTab("hierarchy")}
-            className={cn(
-              "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
-              activeTab === "hierarchy"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            层级配置
-          </button>
-          <button
-            onClick={() => setActiveTab("members")}
-            className={cn(
-              "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
-              activeTab === "members"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {settingsStrings.memberManagement}
-          </button>
-          <button
-            onClick={() => setActiveTab("ai")}
-            className={cn(
-              "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
-              activeTab === "ai"
-                ? "bg-primary/10 text-primary font-medium"
-                : "text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {settingsStrings.aiConfig}
-          </button>
+          {(["basic", "dimensions", "hierarchy", "members", "ai"] as TabType[]).map((tab) => {
+            const labels: Record<TabType, string> = {
+              basic: "基本信息",
+              dimensions: "维度管理",
+              hierarchy: "层级配置",
+              members: "成员管理",
+              ai: "AI配置",
+            }
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
+                  activeTab === tab
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {labels[tab]}
+              </button>
+            )
+          })}
         </div>
 
         <div className="flex-1 p-6">
           {/* Basic Info Tab */}
           {activeTab === "basic" && (
             <div>
-              <h2 className="text-lg font-semibold mb-6">{settingsStrings.basicInfo}</h2>
+              <h2 className="text-lg font-semibold mb-6">基本信息</h2>
               <div className="space-y-4 max-w-md">
                 <div className="space-y-2">
                   <Label>项目名称</Label>
@@ -334,49 +311,65 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
             </div>
           )}
 
-          {/* Dimensions Management Tab */}
+          {/* Dimensions Management Tab — reads from DB */}
           {activeTab === "dimensions" && (
             <div>
               <h2 className="text-lg font-semibold mb-2">维度管理</h2>
               <p className="text-sm text-muted-foreground mb-6">配置本项目启用的知识维度和显示顺序</p>
 
-              <div className="space-y-2">
-                {enabledDimensions.map((dim) => (
-                  <div key={dim.id} className="flex items-center gap-4 p-3 rounded-md border border-border">
-                    <Switch defaultChecked />
-                    <dim.icon className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium text-sm">{dim.name}</span>
-                    <span className="text-sm text-muted-foreground">{dim.description}</span>
-                    <div className="flex-1" />
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+              {dimensionConfigs.length === 0 ? (
+                <p className="text-muted-foreground text-sm">暂无维度配置，请先通过模板创建项目</p>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {enabledDims.map((dim) => (
+                      <div key={dim.configId} className="flex items-center gap-4 p-3 rounded-md border border-border">
+                        <Switch
+                          checked={true}
+                          onCheckedChange={(checked) => handleToggleDimension(dim.configId, checked)}
+                          disabled={!canAdmin}
+                        />
+                        <span className="font-medium text-sm">{dim.name}</span>
+                        <span className="text-sm text-muted-foreground">{dim.description}</span>
+                        <div className="flex-1" />
+                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
 
-              <Separator className="my-6" />
+                  {disabledDims.length > 0 && (
+                    <>
+                      <Separator className="my-6" />
+                      <div className="space-y-2">
+                        {disabledDims.map((dim) => (
+                          <div key={dim.configId} className="flex items-center gap-4 p-3 rounded-md border border-border opacity-60">
+                            <Switch
+                              checked={false}
+                              onCheckedChange={(checked) => handleToggleDimension(dim.configId, checked)}
+                              disabled={!canAdmin}
+                            />
+                            <span className="font-medium text-sm text-muted-foreground">{dim.name}</span>
+                            <span className="text-sm text-muted-foreground">{dim.description}</span>
+                            <div className="flex-1" />
+                            <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
 
-              <div className="space-y-2">
-                {disabledDimensions.map((dim) => (
-                  <div key={dim.id} className="flex items-center gap-4 p-3 rounded-md border border-border opacity-60">
-                    <Switch />
-                    <dim.icon className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium text-sm text-muted-foreground">{dim.name}</span>
-                    <span className="text-sm text-muted-foreground">{dim.description}</span>
-                    <div className="flex-1" />
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                  <div className="mt-6">
+                    <Button
+                      variant="default"
+                      onClick={handleSaveDimensions}
+                      disabled={saving || !canAdmin}
+                      title={!canAdmin ? "查看者无编辑权限" : undefined}
+                    >
+                      {saving ? "保存中..." : "保存"}
+                    </Button>
                   </div>
-                ))}
-              </div>
-
-              <div className="mt-6">
-                <Button
-                  variant="default"
-                  disabled={!canAdmin}
-                  title={!canAdmin ? "查看者无编辑权限" : undefined}
-                >
-                  保存
-                </Button>
-              </div>
+                </>
+              )}
             </div>
           )}
 
@@ -435,7 +428,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
           {activeTab === "members" && (
             <div>
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-semibold">{settingsStrings.memberManagement}</h2>
+                <h2 className="text-lg font-semibold">成员管理</h2>
                 <div className="flex items-center gap-2">
                   <Input
                     placeholder="输入邮箱"
@@ -460,7 +453,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                     title={!canAdmin ? "查看者无编辑权限" : undefined}
                   >
                     <UserPlus className="h-4 w-4 mr-2" />
-                    {settingsStrings.inviteMember}
+                    邀请成员
                   </Button>
                 </div>
               </div>
@@ -469,11 +462,11 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow>
-                      <TableHead className="w-12">{settingsStrings.avatar}</TableHead>
-                      <TableHead>{settingsStrings.username}</TableHead>
-                      <TableHead>{settingsStrings.email}</TableHead>
-                      <TableHead>{settingsStrings.role}</TableHead>
-                      <TableHead className="w-32">{settingsStrings.action}</TableHead>
+                      <TableHead className="w-12">头像</TableHead>
+                      <TableHead>用户名</TableHead>
+                      <TableHead>邮箱</TableHead>
+                      <TableHead>角色</TableHead>
+                      <TableHead className="w-32">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -504,7 +497,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                               disabled={!canAdmin}
                               title={!canAdmin ? "查看者无编辑权限" : undefined}
                             >
-                              {settingsStrings.remove}
+                              移除
                             </button>
                           </TableCell>
                         </TableRow>
@@ -526,16 +519,16 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
           {/* AI Config Tab */}
           {activeTab === "ai" && (
             <div>
-              <h2 className="text-lg font-semibold mb-6">{settingsStrings.aiConfig}</h2>
+              <h2 className="text-lg font-semibold mb-6">AI配置</h2>
               <div className="space-y-4 max-w-md">
                 <div className="space-y-2">
-                  <Label>{settingsStrings.aiProvider}</Label>
+                  <Label>AI Provider</Label>
                   <Select value={aiProvider} onValueChange={(v) => v && setAiProvider(v)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="local">{settingsStrings.localMode}</SelectItem>
+                      <SelectItem value="local">本地模式</SelectItem>
                       <SelectItem value="claude">Claude API</SelectItem>
                       <SelectItem value="codex">Codex API</SelectItem>
                       <SelectItem value="kimi">Kimi API</SelectItem>
@@ -545,6 +538,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                 <div className="space-y-2">
                   <Label>API Key</Label>
                   <Input type="password" placeholder="sk-..." value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">密钥将加密存储，保存后不可查看原文</p>
                 </div>
                 <Button
                   variant="default"
@@ -552,7 +546,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                   disabled={saving || !canAdmin}
                   title={!canAdmin ? "查看者无编辑权限" : undefined}
                 >
-                  {saving ? "保存中..." : settingsStrings.saveConfig}
+                  {saving ? "保存中..." : "保存配置"}
                 </Button>
               </div>
             </div>

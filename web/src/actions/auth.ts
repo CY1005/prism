@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { signIn } from "@/lib/auth";
+import { signIn, signOut, auth } from "@/lib/auth";
 import { registerSchema } from "@/lib/validators/auth";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess } from "@/lib/errors";
@@ -62,10 +62,22 @@ export async function login(
   formData: FormData,
 ): Promise<{ error?: string }> {
   try {
+    const email = formData.get("email") as string;
+
+    // AC5: 禁用账号检查，返回明确提示
+    const [user] = await db
+      .select({ status: users.status })
+      .from(users)
+      .where(eq(users.email, email));
+
+    if (user?.status === "disabled") {
+      return { error: "账号已被禁用，请联系管理员" };
+    }
+
     await signIn("credentials", {
-      email: formData.get("email") as string,
+      email,
       password: formData.get("password") as string,
-      redirectTo: "/",
+      redirectTo: "/projects",
     });
     return {};
   } catch (error) {
@@ -74,4 +86,19 @@ export async function login(
     }
     return { error: "邮箱或密码错误" };
   }
+}
+
+export async function logout() {
+  await signOut({ redirectTo: "/login" });
+}
+
+export async function getSessionUser(): Promise<{
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+} | null> {
+  const session = await auth();
+  if (!session?.user?.id) return null;
+  return session.user as { id: string; name: string; email: string; role: string };
 }

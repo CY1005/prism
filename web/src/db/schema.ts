@@ -45,6 +45,7 @@ export const projects = pgTable("projects", {
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
+  deletedAt: timestamp("deleted_at"), // F2 AC15-18: soft delete
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -62,10 +63,23 @@ export const projectMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("viewer"), // 'admin' | 'editor' | 'viewer'
+    scope: text("scope").notNull().default("project"), // 'project' (v1.x: 'module' | 'dimension')
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [unique().on(t.projectId, t.userId)],
 );
+
+// ─── Refresh Tokens (F1 AC6) ─────────────────────────
+
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(), // SHA-256 hash of the refresh token
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 // ─── Analysis Tasks ───────────────────────────────────
 
