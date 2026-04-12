@@ -9,6 +9,14 @@ import {
   Folder,
   FileText,
   Plus,
+  Users,
+  Server,
+  GitBranch,
+  Lightbulb,
+  TestTube,
+  ClipboardList,
+  Building,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +29,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -32,6 +41,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { FeatureTree, type TreeNode } from "@/components/feature-tree";
 import { DimensionCard } from "@/components/dimension-card";
+import { VersionTimeline, type VersionRecord } from "@/components/version-timeline";
 import { cn } from "@/lib/utils";
 import {
   getNodeWithDimensions,
@@ -43,7 +53,22 @@ import {
   renameNode,
   deleteNode,
   updateNodeSortOrder,
+  getNodeDescendantCount,
+  moveNode,
 } from "@/actions/nodes";
+import { createVersion } from "@/actions/versions";
+
+// ─── Icon Mapping ───────────────────────────────────────
+const dimensionIconMap: Record<string, LucideIcon> = {
+  description: FileText,
+  user_scenario: Users,
+  tech_impl: Server,
+  design_decision: GitBranch,
+  engineering_exp: Lightbulb,
+  test_analysis: TestTube,
+  requirement_analysis: ClipboardList,
+  competitive_ref: Building,
+};
 
 type Project = {
   id: string;
@@ -55,7 +80,7 @@ type Project = {
 
 type DimensionConfig = {
   config: { id: number; dimensionTypeId: number; sortOrder: number };
-  dimType: { id: number; key: string; name: string; icon: string; description: string | null };
+  dimType: { id: number; key: string; name: string; icon: string; description: string | null; fieldSchema: Record<string, unknown> | null };
 };
 
 type NodeData = {
@@ -218,9 +243,10 @@ export function ProjectWorkspace({
   const [addNodeType, setAddNodeType] = useState<"folder" | "file">("file");
   const [addNodeName, setAddNodeName] = useState("");
 
-  const [renameDialog, setRenameDialog] = useState(false);
-  const [renameNodeId, setRenameNodeId] = useState("");
-  const [renameValue, setRenameValue] = useState("");
+  // Delete confirmation dialog
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [deleteNodeId, setDeleteNodeId] = useState("");
+  const [deleteDescendantInfo, setDeleteDescendantInfo] = useState<{ childNodeCount: number; dimensionRecordCount: number } | null>(null);
 
   const [addDimDialog, setAddDimDialog] = useState(false);
   const [addDimTypeId, setAddDimTypeId] = useState(0);
@@ -267,30 +293,53 @@ export function ProjectWorkspace({
     });
   };
 
-  const handleRename = (nodeId: string, currentName: string) => {
-    setRenameNodeId(nodeId);
-    setRenameValue(currentName);
-    setRenameDialog(true);
-  };
-
-  const handleConfirmRename = () => {
-    if (!renameValue.trim()) return;
+  const handleRename = (nodeId: string, newName: string) => {
     startTransition(async () => {
-      await renameNode(renameNodeId, renameValue.trim());
-      setRenameDialog(false);
+      await renameNode(nodeId, newName);
       refreshPage();
     });
   };
 
   const handleDelete = (nodeId: string) => {
-    if (!confirm("确定删除？子节点也会被删除。")) return;
+    setDeleteNodeId(nodeId);
     startTransition(async () => {
-      await deleteNode(nodeId);
-      if (selectedId === nodeId) {
-        setSelectedId("");
-        setNodeData(null);
-        setFolderChildren(null);
+      const info = await getNodeDescendantCount(nodeId);
+      setDeleteDescendantInfo(info);
+      setDeleteDialog(true);
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    startTransition(async () => {
+      // Find parent node for auto-selection after delete (F3 AC14)
+      let parentId: string | null = null;
+      if (selectedId === deleteNodeId) {
+        function findParent(nodes: TreeNode[], targetId: string): string | null {
+          for (const n of nodes) {
+            for (const child of n.children) {
+              if (child.id === targetId) return n.id;
+              const found = findParent([child], targetId);
+              if (found) return found;
+            }
+          }
+          return null;
+        }
+        parentId = findParent(tree, deleteNodeId);
       }
+
+      await deleteNode(deleteNodeId);
+
+      if (selectedId === deleteNodeId) {
+        if (parentId) {
+          handleSelectNode(parentId, "folder");
+        } else {
+          setSelectedId("");
+          setNodeData(null);
+          setFolderChildren(null);
+        }
+      }
+      setDeleteDialog(false);
+      setDeleteDescendantInfo(null);
       refreshPage();
     });
   };
@@ -335,7 +384,10 @@ export function ProjectWorkspace({
       } catch {
         content = { text: editDimContent };
       }
-      await updateDimensionRecord(editDimRecordId, content, 1);
+      // Pass actual record version for optimistic locking
+      const currentRecord = nodeData.records.find((r) => r.record.id === editDimRecordId);
+      const currentVersion = (currentRecord?.record as Record<string, unknown>)?.version as number ?? 1;
+      await updateDimensionRecord(editDimRecordId, content, currentVersion);
       setEditDimDialog(false);
       const data = await getNodeWithDimensions(nodeData.node.id);
       setNodeData(data);
@@ -345,6 +397,13 @@ export function ProjectWorkspace({
   const handleReorder = (nodeId: string, newIndex: number) => {
     startTransition(async () => {
       await updateNodeSortOrder(nodeId, newIndex);
+      refreshPage();
+    });
+  };
+
+  const handleMove = (nodeId: string, newParentId: string) => {
+    startTransition(async () => {
+      await moveNode(nodeId, newParentId);
       refreshPage();
     });
   };
@@ -361,15 +420,53 @@ export function ProjectWorkspace({
     });
   };
 
+  const handleCreateVersion = (data: { versionLabel: string; summary: string; changeType: string; details?: string }) => {
+    if (!nodeData) return;
+    startTransition(async () => {
+      await createVersion(nodeData.node.id, data.versionLabel, data.summary, data.changeType, data.details);
+      const updated = await getNodeWithDimensions(nodeData.node.id);
+      setNodeData(updated);
+      refreshPage();
+    });
+  };
+
   // ─── Computed ─────────────────────────────────────────
 
   const breadcrumbPath = selectedId ? buildBreadcrumb(tree, selectedId) : [];
 
+  // Field-level completion per PRD F4 AC9:
+  // Per dimension: avg of (filled fields / total fields) across records; 0% if no records
+  // Total: avg across all enabled dimensions
+  const completionPercent = (() => {
+    if (!nodeData || dimensions.length === 0) return 0;
+    let dimSum = 0;
+    for (const dim of dimensions) {
+      const records = nodeData.records.filter((r) => r.record.dimensionTypeId === dim.dimType.id);
+      if (records.length === 0) { dimSum += 0; continue; }
+      const schema = dim.dimType.fieldSchema;
+      const totalFields = schema ? Object.keys(schema).length : 1;
+      let recordSum = 0;
+      for (const r of records) {
+        const content = r.record.content;
+        if (totalFields <= 1) {
+          // Simple dimension: filled if content has any non-empty value
+          recordSum += Object.values(content).some((v) => v !== null && v !== undefined && v !== "") ? 1 : 0;
+        } else {
+          const filled = Object.keys(schema!).filter((key) => {
+            const val = content[key];
+            return val !== null && val !== undefined && val !== "";
+          }).length;
+          recordSum += filled / totalFields;
+        }
+      }
+      dimSum += recordSum / records.length;
+    }
+    return Math.round((dimSum / dimensions.length) * 100);
+  })();
   const filledDimensions = nodeData
     ? dimensions.filter((d) => nodeData.records.some((r) => r.record.dimensionTypeId === d.dimType.id)).length
     : 0;
   const totalDimensions = dimensions.length;
-  const completionPercent = totalDimensions > 0 ? Math.round((filledDimensions / totalDimensions) * 100) : 0;
 
   // ─── Render ─────────────────────────────────────────
 
@@ -398,6 +495,7 @@ export function ProjectWorkspace({
               onRename={handleRename}
               onDelete={handleDelete}
               onReorder={handleReorder}
+              onMove={handleMove}
             />
           </div>
         </ScrollArea>
@@ -451,11 +549,13 @@ export function ProjectWorkspace({
                 {dimensions.map((dim) => {
                   const matchingRecords = nodeData.records.filter((r) => r.record.dimensionTypeId === dim.dimType.id);
                   const hasContent = matchingRecords.length > 0;
+                  const DimIcon = dimensionIconMap[dim.dimType.key];
 
                   return (
                     <DimensionCard
                       key={dim.dimType.id}
                       title={dim.dimType.name}
+                      icon={DimIcon}
                       entryCount={matchingRecords.length}
                       defaultExpanded={hasContent}
                       collapsedSummary={hasContent ? undefined : "未填写"}
@@ -475,7 +575,8 @@ export function ProjectWorkspace({
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <p className="text-sm text-muted-foreground">点击添加{dim.dimType.name}</p>
+                          {DimIcon && <DimIcon className="h-10 w-10 text-muted-foreground/40 mb-2" />}
+                          <p className="text-sm text-muted-foreground">点击添加，或上传文档自动分析</p>
                         </div>
                       )}
                     </DimensionCard>
@@ -483,28 +584,11 @@ export function ProjectWorkspace({
                 })}
 
                 {/* Version Timeline */}
-                {nodeData.versions.length > 0 && (
-                  <div className="mt-8 pt-6 border-t">
-                    <h2 className="text-lg font-semibold mb-4">版本演进</h2>
-                    <div className="space-y-0">
-                      {nodeData.versions.map((v, i) => (
-                        <div key={v.id} className="relative flex gap-4">
-                          <div className="relative flex flex-col items-center">
-                            <div className={cn("h-3 w-3 rounded-full border-2 shrink-0 z-10", v.isCurrent ? "border-primary bg-primary" : "border-muted-foreground/40 bg-background")} />
-                            {i < nodeData.versions.length - 1 && <div className="w-0.5 flex-1 bg-border" />}
-                          </div>
-                          <div className="flex-1 pb-6">
-                            <div className="flex items-center gap-2">
-                              <span className={cn("font-mono text-sm font-medium", v.isCurrent ? "text-primary" : "text-muted-foreground")}>{v.versionLabel}</span>
-                              {v.isCurrent && <Badge className="text-xs">当前版本</Badge>}
-                            </div>
-                            <p className="mt-1 text-sm text-muted-foreground">{v.summary}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <VersionTimeline
+                  versions={nodeData.versions as unknown as VersionRecord[]}
+                  versionMode={project.versionMode as "release" | "continuous"}
+                  onCreateVersion={handleCreateVersion}
+                />
               </>
             )}
 
@@ -594,26 +678,23 @@ export function ProjectWorkspace({
         </DialogContent>
       </Dialog>
 
-      {/* Rename Node */}
-      <Dialog open={renameDialog} onOpenChange={setRenameDialog}>
+      {/* Delete Confirmation */}
+      <Dialog open={deleteDialog} onOpenChange={setDeleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>重命名</DialogTitle>
+            <DialogTitle>确认删除</DialogTitle>
+            <DialogDescription>
+              {deleteDescendantInfo && deleteDescendantInfo.childNodeCount > 0
+                ? `此操作将同时删除 ${deleteDescendantInfo.childNodeCount} 个子节点和 ${deleteDescendantInfo.dimensionRecordCount} 条维度记录，且不可撤销。`
+                : deleteDescendantInfo
+                  ? `此操作将删除 ${deleteDescendantInfo.dimensionRecordCount} 条维度记录，且不可撤销。`
+                  : "确定要删除此节点吗？此操作不可撤销。"
+              }
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>新名称</Label>
-              <Input
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleConfirmRename()}
-                autoFocus
-              />
-            </div>
-          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameDialog(false)}>取消</Button>
-            <Button onClick={handleConfirmRename} disabled={!renameValue.trim()}>确认</Button>
+            <Button variant="outline" onClick={() => setDeleteDialog(false)}>取消</Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>删除</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

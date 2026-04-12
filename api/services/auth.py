@@ -124,7 +124,8 @@ def refresh_access_token(db: Session, raw_refresh_token: str) -> tuple[str | Non
     if not record:
         return None, None, "无效的刷新令牌"
 
-    if record.expires_at < datetime.now(timezone.utc):
+    expires_at = record.expires_at.replace(tzinfo=timezone.utc) if record.expires_at.tzinfo is None else record.expires_at
+    if expires_at < datetime.now(timezone.utc):
         db.delete(record)
         db.commit()
         return None, None, "刷新令牌已过期"

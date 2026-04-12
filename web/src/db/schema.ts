@@ -168,16 +168,24 @@ export const dimensionRecords = pgTable("dimension_records", {
 
 // ─── Version Record ────────────────────────────────────
 
-export const versionRecords = pgTable("version_records", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  nodeId: uuid("node_id")
-    .notNull()
-    .references(() => nodes.id, { onDelete: "cascade" }),
-  versionLabel: text("version_label").notNull(), // "v3.9.3" or "2026-04-07"
-  summary: text("summary").notNull(),
-  details: text("details"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const versionRecords = pgTable(
+  "version_records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => nodes.id, { onDelete: "cascade" }),
+    versionLabel: text("version_label").notNull(), // "v3.9.3" or "2026-04-07"
+    summary: text("summary").notNull(),
+    details: text("details"),
+    changeType: text("change_type").notNull().default("added"), // added | modified | deprecated | split | merged | migrated
+    isCurrent: boolean("is_current").notNull().default(false),
+    snapshotData: jsonb("snapshot_data").$type<Record<string, unknown>[]>(), // dimension snapshots at version creation
+    mode: text("mode").notNull().default("release"), // release | continuous
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.nodeId, t.versionLabel)],
+);
 
 // ─── Node Relation (cross-project ok) ──────────────────
 

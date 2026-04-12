@@ -9,7 +9,7 @@ import {
   projectDimensionConfigs,
   nodeRelations,
 } from "@/db/schema";
-import { eq, and, asc, isNull, inArray, or } from "drizzle-orm";
+import { eq, and, asc, isNull, inArray, or, sql, like } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
@@ -387,8 +387,22 @@ export async function deleteNode(nodeId: string): Promise<ActionResult> {
 
     await checkProjectAccess(user.id, node.projectId, "editor");
 
-    // CASCADE handles children and dimension_records
-    await db.delete(nodes).where(eq(nodes.id, nodeId));
+    // parentId has no FK cascade — manually delete descendants first
+    // Find all descendants via materialized path
+    const descendants = await db
+      .select({ id: nodes.id })
+      .from(nodes)
+      .where(
+        and(
+          eq(nodes.projectId, node.projectId),
+          like(nodes.path, `%${nodeId}%`),
+        ),
+      );
+    const descendantIds = descendants.map((d) => d.id);
+
+    // Delete all descendants + the node itself in one go
+    const allIds = [...descendantIds, nodeId];
+    await db.delete(nodes).where(inArray(nodes.id, allIds));
 
     logger.action("node.delete", user.id, {
       nodeId,
@@ -795,4 +809,136 @@ export async function updateNodeSortOrder(
   } catch (error) {
     return actionError(error);
   }
+}
+
+export async function moveNode(
+  nodeId: string,
+  newParentId: string | null,
+): Promise<ActionResult> {
+  try {
+    const user = await requireAuth();
+
+    const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
+    if (!node)
+      return actionError(
+        new AppError("节点不存在", "blocking", "NOT_FOUND", 404),
+      );
+
+    await checkProjectAccess(user.id, node.projectId, "editor");
+
+    // Prevent moving to self
+    if (newParentId === nodeId) {
+      return actionError(
+        new AppError("不能将节点移动到自身下", "blocking", "VALIDATION_ERROR", 400),
+      );
+    }
+
+    // Resolve new parent
+    let newParent: (typeof node) | null = null;
+    if (newParentId) {
+      const [p] = await db.select().from(nodes).where(eq(nodes.id, newParentId));
+      if (!p)
+        return actionError(
+          new AppError("目标父节点不存在", "blocking", "NOT_FOUND", 404),
+        );
+      // Prevent moving into own descendant (check if newParent's path contains nodeId)
+      if (p.path.includes(nodeId)) {
+        return actionError(
+          new AppError("不能将节点移动到其子节点下", "blocking", "VALIDATION_ERROR", 400),
+        );
+      }
+      newParent = p;
+    }
+
+    const newDepth = newParent ? newParent.depth + 1 : 0;
+    const newPath = newParent
+      ? newParent.path
+        ? `${newParent.path}/${newParent.id}`
+        : newParent.id
+      : "";
+    const depthDiff = newDepth - node.depth;
+    const oldPath = node.path ? `${node.path}/${node.id}` : node.id;
+    const newFullPath = newPath ? `${newPath}/${node.id}` : node.id;
+
+    await db.transaction(async (tx) => {
+      // Update the node itself
+      await tx
+        .update(nodes)
+        .set({
+          parentId: newParentId,
+          depth: newDepth,
+          path: newPath,
+          updatedBy: user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(nodes.id, nodeId));
+
+      // Update all descendants: path and depth
+      const descendants = await tx
+        .select()
+        .from(nodes)
+        .where(
+          and(
+            eq(nodes.projectId, node.projectId),
+            like(nodes.path, `%${nodeId}%`),
+          ),
+        );
+
+      for (const d of descendants) {
+        if (d.id === nodeId) continue;
+        const updatedPath = d.path.replace(oldPath, newFullPath);
+        const updatedDepth = d.depth + depthDiff;
+        await tx
+          .update(nodes)
+          .set({ path: updatedPath, depth: updatedDepth })
+          .where(eq(nodes.id, d.id));
+      }
+    });
+
+    logger.action("node.move", user.id, {
+      nodeId,
+      newParentId,
+      projectId: node.projectId,
+    });
+    revalidatePath(`/projects/${node.projectId}`);
+
+    return actionSuccess(undefined);
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function getNodeDescendantCount(nodeId: string): Promise<{
+  childNodeCount: number;
+  dimensionRecordCount: number;
+} | null> {
+  const user = await requireAuth();
+
+  const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
+  if (!node) return null;
+
+  await checkProjectAccess(user.id, node.projectId, "viewer");
+
+  // Find all descendant nodes (path contains this nodeId)
+  const descendants = await db
+    .select({ id: nodes.id })
+    .from(nodes)
+    .where(
+      and(
+        eq(nodes.projectId, node.projectId),
+        like(nodes.path, `%${nodeId}%`),
+      ),
+    );
+
+  const descendantIds = descendants.map((d) => d.id).filter((id) => id !== nodeId);
+  const childNodeCount = descendantIds.length;
+
+  // Count dimension records for this node + all descendants
+  const allNodeIds = [nodeId, ...descendantIds];
+  const [result] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(dimensionRecords)
+    .where(inArray(dimensionRecords.nodeId, allNodeIds));
+
+  return { childNodeCount, dimensionRecordCount: result?.count ?? 0 };
 }
