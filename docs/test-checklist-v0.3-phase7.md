@@ -216,42 +216,62 @@
 
 ## Summary
 
-### F13 AI需求分析
+### F13 AI需求分析（修复后）
 
 | AC | Status | Issue |
 |----|--------|-------|
 | AC1: Document input | **PASS** | Text + file upload UI complete; Word parsing not implemented |
-| AC2: Progressive L1/L2/L3 | **PASS** | SSE streaming + progressive buttons work correctly |
+| AC2: Progressive L1/L2/L3 | **PASS** | SSE streaming + progressive buttons; `analysis_level` 字段已对齐 (Bug #7 fixed) |
 | AC3: Source level labels | **PASS** | Labels match ADR-013 spec exactly |
-| AC4: Relation graph highlight | **PARTIAL** | No integration with relation-graph component |
-| AC5: Save to requirement_analysis | **PARTIAL** | Contract mismatch: frontend sends `layers`, backend expects `analysis_result` |
-| AC6: Generate test points | **PASS** | Endpoint + UI + fallback all present |
-| AC7: Batch import test points | **PARTIAL** | Contract mismatch: frontend sends `test_point_ids`, backend expects `test_points` objects |
+| AC4: Relation graph highlight | **PARTIAL** | 遗留: 分析结果未传递给 relation-graph 组件 |
+| AC5: Save to requirement_analysis | **PASS** | 已修: 前端序列化 layers → `analysis_result` string (Bug #1 fixed) |
+| AC6: Generate test points | **PASS** | 已修: 新建 `generateTestPointsAI()` 匹配后端 schema (Bug #8 fixed) |
+| AC7: Batch import test points | **PASS** | 已修: 前端改发完整 `AITestPoint[]` (Bug #2 fixed) |
 
-### F12 功能对比矩阵
+### F12 功能对比矩阵（修复后）
 
 | AC | Status | Issue |
 |----|--------|-------|
-| AC1: AI generate comparison | **PARTIAL** | Contract mismatch: frontend sends names, backend expects UUIDs |
+| AC1: AI generate comparison | **PASS** | 已修: 前端改用 UUID-based request (Bug #3 fixed) |
 | AC2: Default 3 dims + custom | **PASS** | Exact match with PRD spec |
 | AC3: Manual CRUD | **PASS** | Edit/add/delete rows work locally; PUT not called to persist |
-| AC4: Highlight differences | **PASS** | Green/red cell highlighting implemented |
-| AC5: Export results | **PARTIAL** | Contract mismatch: different URL pattern |
-| AC6: Backfill to F6 | **PARTIAL** | Contract mismatch: different URL and payload structure |
+| AC4: Highlight differences | **PASS** | 已修: 改用 score 判断高亮 (Bug #6 fixed) |
+| AC5: Export results | **PASS** | 已修: 前端改用 path param `{comparison_id}` (Bug #4 fixed) |
+| AC6: Backfill to F6 | **PASS** | 已修: 前端改用 path param + UUID payload (Bug #5 fixed) |
 
-### Critical Issues Found
+### Bug 记录（共 8 个，7 已修，1 遗留）
 
-1. **F13 AC5 — Save Analysis contract mismatch**: Frontend `saveAnalysis()` sends `{ layers: [...] }` but backend `SaveAnalysisRequest` expects `{ analysis_result: str }`. Will cause 422 at runtime.
+#### Round 1 — QA 发现的 6 个契约不匹配（commit 5eb01e8 修复）
 
-2. **F13 AC7 — Save Test Points contract mismatch**: Frontend sends `{ test_point_ids: string[] }` but backend expects `{ test_points: AITestPoint[] }`. Will cause 422 at runtime.
+| # | 位置 | 问题 | 修复 |
+|---|------|------|------|
+| 1 | F13 AC5 saveAnalysis | 前端发 `{ layers }`, 后端要 `{ analysis_result: str }` → 422 | ✅ 前端序列化 layers 为 JSON string |
+| 2 | F13 AC7 saveTestPoints | 前端发 `{ test_point_ids }`, 后端要 `{ test_points: AITestPoint[] }` → 422 | ✅ 前端改发完整对象 |
+| 3 | F12 AC1 generateComparison | 前端发 `{ feature_name, competitors: string[] }`, 后端要 `{ node_ids: UUID[], competitor_ids: UUID[] }` → 422 | ✅ 前端改用 UUID-based request |
+| 4 | F12 AC5 exportComparison | 前端 `GET /api/comparison/export?project_id=...`, 后端 `GET /api/comparison/{id}/export` → 404 | ✅ 前端改用 path param |
+| 5 | F12 AC6 backfillRow | 前端 `POST /api/comparison/backfill` + name-based, 后端 `POST /api/comparison/{id}/backfill` + UUID-based → 404/422 | ✅ 前端改用 path param + UUID payload |
+| 6 | F12 AC4 highlight | 前端 `ComparisonCell.highlight` 字段, 后端 `ComparisonCell.score` 字段 → 高亮不生效 | ✅ 前端改用 score 判断 |
 
-3. **F12 AC1 — Generate Comparison contract mismatch**: Frontend sends `{ feature_name, competitors: string[], dimensions }` but backend expects `{ node_ids: UUID[], competitor_ids: UUID[] }`. Structurally incompatible.
+#### Round 2 — Team Lead 逐字段审查发现的 2 个运行时 bug（commit f60fd2b 修复）
 
-4. **F12 AC5 — Export URL mismatch**: Frontend calls `GET /api/comparison/export?project_id=...` but backend expects `GET /api/comparison/{comparison_id}/export`. 404 at runtime.
+| # | 位置 | 问题 | 修复 |
+|---|------|------|------|
+| 7 | F13 AC2 analyzeRequirementStream | 前端发 `level`, 后端要 `analysis_level` → L2/L3 永远不触发（静默降级到 L1）; `node_id` 前端 optional 后端 required → 422 | ✅ 字段名对齐 + node_id 改 required |
+| 8 | F13 AC6 generateTestPoints | 前端发 `{ requirement_text, affected_modules }`, 后端要 `{ node_id, analysis_result }` → 完全不同 schema → 422 | ✅ 新建 `generateTestPointsAI()` 匹配后端 schema, 测试点渲染适配 `AITestPoint`（无 id/coverage_summary） |
 
-5. **F12 AC6 — Backfill URL/payload mismatch**: Frontend calls `POST /api/comparison/backfill` with name-based payload, backend expects `POST /api/comparison/{comparison_id}/backfill` with UUID-based payload.
+#### 根因分析
 
-6. **F13 AC4 — Relation graph integration missing**: No code connects analysis affected modules to the relation-graph component for visual highlighting.
+**为什么出 8 个 bug？** Backend 和 Frontend 并行开发，没有共享 API contract 文件（如 OpenAPI spec）。两边各自基于 PRD 理解实现，字段命名、类型、URL 结构全靠默契 → 不可能对齐。
+
+**为什么 Round 1 修完又漏 2 个？** Round 1 修的是 QA 能通过代码审查发现的表层（URL path, 顶层字段名）。Round 2 的 `level` vs `analysis_level` 和 `generateTestPoints` schema 差异需要逐字段比对请求体才能发现。
+
+**改进建议**: 下一个 Phase 考虑先让 Backend 输出 OpenAPI schema（FastAPI 自动生成），Frontend 基于 schema 生成类型，从源头消除契约漂移。
+
+#### 遗留未修
+
+| # | 位置 | 问题 | 状态 |
+|---|------|------|------|
+| — | F13 AC4 | 关系图高亮: 分析结果中的 affected modules 未传递给 relation-graph 组件做视觉高亮 | 遗留，需跨页面通信或组件嵌入 |
 
 ### Non-blocking Notes
 
