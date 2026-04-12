@@ -712,6 +712,12 @@ export function ProjectWorkspace({
                 <span className="text-sm font-medium">{completionPercent}%</span>
               </div>
               <Separator orientation="vertical" className="h-5" />
+              <Button variant="outline" size="sm" className="gap-1.5" asChild>
+                <Link href={`/projects/${project.id}/analysis?nodeId=${selectedId}`}>
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  需求分析
+                </Link>
+              </Button>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddRelationDialog(true)}>
                 <GitBranch className="h-3.5 w-3.5" />
                 添加关联

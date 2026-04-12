@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { useState, useRef, useCallback } from "react"
 import {
   Bell,
@@ -10,23 +10,32 @@ import {
   Settings,
   Shield,
   AlertTriangle,
-  CheckCircle,
-  Lightbulb,
-  Info,
   Type,
   FileText,
   ImagePlus,
   X,
   Loader2,
+  ChevronDown,
+  Save,
+  TestTube,
+  Scan,
+  Globe,
 } from "lucide-react"
 import { GlobalSearchBar } from "@/components/global-search-bar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -37,7 +46,17 @@ import {
 } from "@/components/ui/breadcrumb"
 import { detailStrings } from "@/lib/project-detail-data"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { analyzeRequirement, generateTestPoints, type AnalyzeResponse, type TestPointsResponse } from "@/services/analyzer"
+import { AnalysisResult } from "@/components/analysis-result"
+import {
+  analyzeRequirementStream,
+  generateTestPoints,
+  saveAnalysis,
+  saveTestPoints,
+  type AnalysisLevel,
+  type LayerResult,
+  type StreamChunk,
+  type TestPointsResponse,
+} from "@/services/analyzer"
 
 // File upload types
 interface UploadedFile {
@@ -50,36 +69,64 @@ interface UploadedFile {
   previewUrl?: string
 }
 
-// Format file size
+// AI providers
+const AI_PROVIDERS = [
+  { value: "default", label: "默认" },
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "deepseek", label: "DeepSeek" },
+]
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B"
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
   return (bytes / (1024 * 1024)).toFixed(1) + " MB"
 }
 
+function createEmptyLayer(level: AnalysisLevel): LayerResult {
+  return {
+    level,
+    affected_modules: [],
+    completeness_issues: [],
+    suggestions: [],
+    isStreaming: true,
+    isComplete: false,
+  }
+}
 
 export default function AnalysisPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const projectId = params.projectId as string
+  const initialNodeId = searchParams.get("nodeId") || ""
+
   const [requirementText, setRequirementText] = useState("")
-  const [isAnalyzed, setIsAnalyzed] = useState(false)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [nodeId, setNodeId] = useState(initialNodeId)
+  const [provider, setProvider] = useState("default")
+  const [layers, setLayers] = useState<LayerResult[]>([])
+  const [currentLevel, setCurrentLevel] = useState<AnalysisLevel | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadedImages, setUploadedImages] = useState<UploadedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
-  const [analysisResult, setAnalysisResult] = useState<AnalyzeResponse | null>(null)
   const [testPointsResult, setTestPointsResult] = useState<TestPointsResponse | null>(null)
   const [isGeneratingPoints, setIsGeneratingPoints] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [checkedTestPoints, setCheckedTestPoints] = useState<Set<string>>(new Set())
+  const [isSaving, setIsSaving] = useState(false)
+  const [isSavingTestPoints, setIsSavingTestPoints] = useState(false)
 
+  const abortRef = useRef<AbortController | null>(null)
   const documentInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
   const MAX_DOCUMENTS = 3
   const MAX_IMAGES = 5
 
-  // Check if there's any input content
   const hasContent = requirementText.trim() || uploadedFiles.length > 0 || uploadedImages.length > 0
+  const hasResults = layers.length > 0
+  const isStreaming = layers.some((l) => l.isStreaming)
+  const allLayersDone = layers.length > 0 && layers.every((l) => l.isComplete)
+  const highestLevel = layers.length > 0 ? layers[layers.length - 1].level : null
 
   // Handle file upload
   const handleFileUpload = useCallback((files: FileList | null, type: "document" | "image") => {
@@ -113,7 +160,6 @@ export default function AnalysisPage() {
         setUploadedImages((prev) => [...prev, newFile])
       }
 
-      // Simulate upload completion
       setTimeout(() => {
         if (type === "document") {
           setUploadedFiles((prev) =>
@@ -128,20 +174,16 @@ export default function AnalysisPage() {
     })
   }, [uploadedFiles.length, uploadedImages.length])
 
-  // Handle file removal
   const handleRemoveFile = (id: string, type: "document" | "image") => {
     if (type === "document") {
       setUploadedFiles((prev) => prev.filter((f) => f.id !== id))
     } else {
       const file = uploadedImages.find((f) => f.id === id)
-      if (file?.previewUrl) {
-        URL.revokeObjectURL(file.previewUrl)
-      }
+      if (file?.previewUrl) URL.revokeObjectURL(file.previewUrl)
       setUploadedImages((prev) => prev.filter((f) => f.id !== id))
     }
   }
 
-  // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(true)
@@ -155,14 +197,10 @@ export default function AnalysisPage() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
-
     const files = e.dataTransfer.files
     if (!files.length) return
-
-    // Determine file type based on extension
     const firstFile = files[0]
     const extension = "." + firstFile.name.split(".").pop()?.toLowerCase()
-
     if ([".pdf", ".doc", ".docx", ".txt"].includes(extension)) {
       handleFileUpload(files, "document")
     } else if ([".png", ".jpg", ".jpeg"].includes(extension)) {
@@ -170,48 +208,151 @@ export default function AnalysisPage() {
     }
   }, [handleFileUpload])
 
-  const handleAnalyze = async () => {
-    if (!hasContent) return
-    setIsAnalyzing(true)
+  // Start analysis at a given level
+  const startAnalysis = (level: AnalysisLevel) => {
+    if (!hasContent && level === "L1") return
     setError(null)
+    setCurrentLevel(level)
 
-    const result = await analyzeRequirement({
-      project_id: projectId,
-      requirement_text: requirementText,
-    })
-
-    setIsAnalyzing(false)
-
-    if (result.ok) {
-      setAnalysisResult(result.data)
-      setIsAnalyzed(true)
+    // For L1, reset layers; for L2/L3, append
+    if (level === "L1") {
+      setLayers([createEmptyLayer("L1")])
+      setTestPointsResult(null)
+      setCheckedTestPoints(new Set())
     } else {
-      setError(result.error)
+      setLayers((prev) => [...prev, createEmptyLayer(level)])
     }
+
+    const controller = analyzeRequirementStream(
+      {
+        project_id: projectId,
+        requirement_text: requirementText,
+        node_id: nodeId || undefined,
+        level,
+        provider: provider !== "default" ? provider : undefined,
+      },
+      (chunk: StreamChunk) => {
+        setLayers((prev) => {
+          const updated = [...prev]
+          const idx = updated.findIndex((l) => l.level === chunk.level)
+          if (idx === -1) return prev
+          const layer = { ...updated[idx] }
+
+          if (chunk.type === "modules" && chunk.data.affected_modules) {
+            layer.affected_modules = [
+              ...layer.affected_modules,
+              ...chunk.data.affected_modules,
+            ]
+          }
+          if (chunk.type === "completeness" && chunk.data.completeness_issues) {
+            layer.completeness_issues = [
+              ...layer.completeness_issues,
+              ...chunk.data.completeness_issues,
+            ]
+          }
+          if (chunk.type === "suggestions" && chunk.data.suggestions) {
+            layer.suggestions = [
+              ...layer.suggestions,
+              ...chunk.data.suggestions,
+            ]
+          }
+          if (chunk.type === "metadata" && chunk.data.metadata) {
+            layer.metadata = chunk.data.metadata
+          }
+          if (chunk.type === "done") {
+            layer.isStreaming = false
+            layer.isComplete = true
+          }
+          if (chunk.type === "error") {
+            layer.isStreaming = false
+            layer.isComplete = true
+          }
+
+          updated[idx] = layer
+          return updated
+        })
+      },
+      (errMsg) => {
+        setError(errMsg)
+        setLayers((prev) =>
+          prev.map((l) =>
+            l.level === level ? { ...l, isStreaming: false, isComplete: true } : l
+          )
+        )
+        setCurrentLevel(null)
+      },
+      () => {
+        setLayers((prev) =>
+          prev.map((l) =>
+            l.level === level ? { ...l, isStreaming: false, isComplete: true } : l
+          )
+        )
+        setCurrentLevel(null)
+      },
+    )
+
+    abortRef.current = controller
   }
 
-  const directModules = analysisResult?.affected_modules.filter((m) => m.impact_level === "high") ?? []
-  const indirectModules = analysisResult?.affected_modules.filter((m) => m.impact_level !== "high") ?? []
+  const handleAnalyze = () => startAnalysis("L1")
 
   const handleGenerateTestPoints = async () => {
-    if (!analysisResult) return
+    const allModules = layers.flatMap((l) => l.affected_modules)
+    if (allModules.length === 0) return
     setIsGeneratingPoints(true)
     setError(null)
 
     const result = await generateTestPoints({
       project_id: projectId,
       requirement_text: requirementText,
-      affected_modules: analysisResult.affected_modules.map((m) => m.node_id),
+      affected_modules: allModules.map((m) => m.node_id),
       test_depth: "standard",
     })
 
     setIsGeneratingPoints(false)
-
     if (result.ok) {
       setTestPointsResult(result.data)
+      // Pre-check all
+      setCheckedTestPoints(new Set(result.data.test_points.map((p) => p.id)))
     } else {
       setError(result.error)
     }
+  }
+
+  const handleSaveAnalysis = async () => {
+    if (!nodeId) {
+      setError("请先选择要分析的功能节点")
+      return
+    }
+    setIsSaving(true)
+    const result = await saveAnalysis(projectId, nodeId, layers)
+    setIsSaving(false)
+    if (!result.ok) setError(result.error)
+  }
+
+  const handleSaveTestPoints = async () => {
+    if (!nodeId) {
+      setError("请先选择要分析的功能节点")
+      return
+    }
+    if (!testPointsResult) return
+    setIsSavingTestPoints(true)
+    // Backend expects full test point objects, not just IDs
+    const selectedPoints = testPointsResult.test_points.filter((p) =>
+      checkedTestPoints.has(p.id)
+    )
+    const result = await saveTestPoints(projectId, nodeId, selectedPoints)
+    setIsSavingTestPoints(false)
+    if (!result.ok) setError(result.error)
+  }
+
+  const toggleTestPoint = (id: string) => {
+    setCheckedTestPoints((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const priorityColor: Record<string, string> = {
@@ -314,43 +455,73 @@ export default function AnalysisPage() {
         >
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold">需求描述</h2>
-            <TooltipProvider>
-              <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
-                <Tooltip>
-                  <TooltipTrigger
-                    className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md bg-background shadow-sm hover:bg-accent"
-                  >
-                    <Type className="h-4 w-4" />
-                  </TooltipTrigger>
-                  <TooltipContent>文字输入</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger
-                    className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md hover:bg-background disabled:opacity-50"
-                    onClick={() => documentInputRef.current?.click()}
-                    disabled={uploadedFiles.length >= MAX_DOCUMENTS}
-                  >
-                    <FileText className="h-4 w-4" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    上传文档 ({uploadedFiles.length}/{MAX_DOCUMENTS})
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger
-                    className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md hover:bg-background disabled:opacity-50"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={uploadedImages.length >= MAX_IMAGES}
-                  >
-                    <ImagePlus className="h-4 w-4" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    上传图片 ({uploadedImages.length}/{MAX_IMAGES})
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
+            <div className="flex items-center gap-2">
+              {/* AI Provider Switcher */}
+              <Select value={provider} onValueChange={(v) => v && setProvider(v)}>
+                <SelectTrigger className="w-[120px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_PROVIDERS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <TooltipProvider>
+                <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
+                  <Tooltip>
+                    <TooltipTrigger
+                      className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md bg-background shadow-sm hover:bg-accent"
+                    >
+                      <Type className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>文字输入</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md hover:bg-background disabled:opacity-50"
+                      onClick={() => documentInputRef.current?.click()}
+                      disabled={uploadedFiles.length >= MAX_DOCUMENTS}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      上传文档 ({uploadedFiles.length}/{MAX_DOCUMENTS})
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      className="inline-flex items-center justify-center h-7 w-7 p-0 rounded-md hover:bg-background disabled:opacity-50"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={uploadedImages.length >= MAX_IMAGES}
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      上传图片 ({uploadedImages.length}/{MAX_IMAGES})
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+            </div>
           </div>
+
+          {/* Node ID selector */}
+          {nodeId && (
+            <div className="mb-3 flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                功能节点: {nodeId}
+              </Badge>
+              <button
+                onClick={() => setNodeId("")}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
 
           {/* Hidden file inputs */}
           <input
@@ -435,16 +606,23 @@ export default function AnalysisPage() {
           <Button
             className="mt-4 w-fit"
             onClick={handleAnalyze}
-            disabled={!hasContent || isAnalyzing}
+            disabled={!hasContent || isStreaming}
           >
-            {isAnalyzing ? "分析中..." : "AI 分析"}
+            {isStreaming && currentLevel === "L1" ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                分析中...
+              </>
+            ) : (
+              "AI 分析"
+            )}
           </Button>
         </div>
 
         {/* Right Side - Analysis Results */}
         <div className="w-1/2 flex flex-col">
           <ScrollArea className="flex-1">
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-6">
               {/* Error State */}
               {error && (
                 <Card className="border-destructive/60 shadow-sm p-5">
@@ -460,125 +638,76 @@ export default function AnalysisPage() {
               )}
 
               {/* Empty State */}
-              {!isAnalyzed && !error && (
+              {!hasResults && !error && (
                 <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
                   <p className="text-sm">输入需求后点击「AI 分析」查看结果</p>
                 </div>
               )}
 
-              {/* Results */}
-              {isAnalyzed && analysisResult && (
-                <>
-                  {/* Impact Analysis */}
-                  <Card className="border-border/60 shadow-sm p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <AlertTriangle className="h-5 w-5 text-orange-500" />
-                      <h3 className="font-medium">影响范围</h3>
-                      <Badge variant="outline" className="ml-auto text-xs">
-                        {analysisResult.affected_modules.length} 个模块
-                      </Badge>
-                    </div>
-                    <div className="space-y-3">
-                      {directModules.length > 0 && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-2">直接影响</p>
-                          <div className="space-y-2">
-                            {directModules.map((mod) => (
-                              <div key={mod.node_id} className="flex items-start gap-2">
-                                <Badge className="bg-primary/10 text-primary hover:bg-primary/10 shrink-0">直接</Badge>
-                                <div>
-                                  <span className="text-sm font-medium">{mod.node_path || mod.node_name}</span>
-                                  <p className="text-xs text-muted-foreground">{mod.reason}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {indirectModules.length > 0 && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-2">间接影响</p>
-                          <div className="space-y-2">
-                            {indirectModules.map((mod) => (
-                              <div key={mod.node_id} className="flex items-start gap-2">
-                                <Badge variant="secondary" className="shrink-0">间接</Badge>
-                                <div>
-                                  <span className="text-sm font-medium">{mod.node_path || mod.node_name}</span>
-                                  <p className="text-xs text-muted-foreground">{mod.reason}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {analysisResult.affected_modules.length === 0 && (
-                        <p className="text-sm text-muted-foreground">未发现受影响的模块</p>
-                      )}
-                    </div>
-                  </Card>
+              {/* Progressive Layer Results */}
+              {layers.map((layer) => (
+                <div key={layer.level}>
+                  <AnalysisResult layer={layer} />
 
-                  {/* Completeness Issues */}
-                  <Card className="border-border/60 shadow-sm p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      <h3 className="font-medium">完整性评估</h3>
+                  {/* Expand button after each complete layer */}
+                  {layer.isComplete && layer.level === "L1" && highestLevel === "L1" && (
+                    <div className="flex justify-center mt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startAnalysis("L2")}
+                        disabled={isStreaming}
+                        className="gap-2"
+                      >
+                        <Scan className="h-4 w-4" />
+                        扩展分析范围
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      {analysisResult.completeness_issues.length > 0 ? (
-                        analysisResult.completeness_issues.map((issue, index) => (
-                          <div key={index} className="flex items-center gap-2 text-sm">
-                            <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-                            <span className="text-muted-foreground">{issue}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                          <span>需求描述完整，未发现明显遗漏</span>
-                        </div>
-                      )}
+                  )}
+                  {layer.isComplete && layer.level === "L2" && highestLevel === "L2" && (
+                    <div className="flex justify-center mt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startAnalysis("L3")}
+                        disabled={isStreaming}
+                        className="gap-2"
+                      >
+                        <Globe className="h-4 w-4" />
+                        全局扫描
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
                     </div>
-                  </Card>
-
-                  {/* Suggestions */}
-                  {analysisResult.suggestions.length > 0 && (
-                    <Card className="border-border/60 shadow-sm p-5">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Lightbulb className="h-5 w-5 text-yellow-500" />
-                        <h3 className="font-medium">建议</h3>
-                      </div>
-                      <div className="space-y-2">
-                        {analysisResult.suggestions.map((suggestion, index) => (
-                          <div key={index} className="flex items-start gap-2 text-sm">
-                            <span className="text-muted-foreground shrink-0">{index + 1}.</span>
-                            <span>{suggestion}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
                   )}
 
-                  {/* Metadata */}
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2">
-                    <div className="flex items-center gap-1">
-                      <Info className="h-3 w-3" />
-                      <span>模型: {analysisResult.metadata.model}</span>
-                    </div>
-                    <span>耗时: {analysisResult.metadata.analysis_time_ms}ms</span>
-                    {analysisResult.metadata.tokens_used > 0 && (
-                      <span>Token: {analysisResult.metadata.tokens_used}</span>
-                    )}
-                  </div>
-                </>
-              )}
+                  {/* Separator between layers */}
+                  {layer.level !== highestLevel && (
+                    <div className="border-t border-border/60 my-4" />
+                  )}
+                </div>
+              ))}
             </div>
           </ScrollArea>
 
           {/* Bottom Action Bar */}
-          {isAnalyzed && (
+          {hasResults && allLayersDone && !testPointsResult && (
             <div className="border-t border-border p-4 flex items-center justify-between bg-card">
-              <Button variant="outline">保存分析结果</Button>
-              <Button onClick={handleGenerateTestPoints} disabled={isGeneratingPoints}>
+              <Button
+                variant="outline"
+                onClick={handleSaveAnalysis}
+                disabled={isSaving}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {isSaving ? "保存中..." : "保存到需求分析维度"}
+              </Button>
+              <Button
+                onClick={handleGenerateTestPoints}
+                disabled={isGeneratingPoints}
+                className="gap-2"
+              >
+                <TestTube className="h-4 w-4" />
                 {isGeneratingPoints ? "生成中..." : "生成测试点"}
               </Button>
             </div>
@@ -610,8 +739,13 @@ export default function AnalysisPage() {
                         <div className="space-y-2">
                           {points.map((point) => (
                             <Card key={point.id} className="border-border/60 p-3">
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
+                              <div className="flex items-start gap-3">
+                                <Checkbox
+                                  checked={checkedTestPoints.has(point.id)}
+                                  onCheckedChange={() => toggleTestPoint(point.id)}
+                                  className="mt-0.5"
+                                />
+                                <div className="flex-1">
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs text-muted-foreground font-mono">{point.id}</span>
                                     <span className="text-sm font-medium">{point.title}</span>
@@ -635,6 +769,20 @@ export default function AnalysisPage() {
                   </div>
                 </div>
               </ScrollArea>
+
+              {/* Test Points Action Bar */}
+              <div className="border-t border-border p-4 flex items-center justify-between bg-card">
+                <span className="text-sm text-muted-foreground">
+                  已选 {checkedTestPoints.size} / {testPointsResult.test_points.length} 条
+                </span>
+                <Button
+                  onClick={handleSaveTestPoints}
+                  disabled={isSavingTestPoints || checkedTestPoints.size === 0}
+                  className="gap-2"
+                >
+                  {isSavingTestPoints ? "录入中..." : "一键录入测试分析维度"}
+                </Button>
+              </div>
             </div>
           )}
         </div>
