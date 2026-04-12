@@ -21,6 +21,12 @@ from api.models.tables import (
 
 def _get_accessible_project_ids(db: Session, user_id: str) -> list[str] | None:
     """Return project IDs the user can access, or None if platform_admin (no filter)."""
+    import uuid as _uuid
+    try:
+        _uuid.UUID(user_id)
+    except (ValueError, AttributeError):
+        return []  # invalid user_id → no access
+
     user = db.query(User).filter(User.id == user_id).first()
     if user and user.role == "platform_admin":
         return None  # no filter needed
@@ -58,6 +64,10 @@ def _build_breadcrumb(db: Session, node: Node, project_name: str) -> list[str]:
         name = id_to_name.get(pid)
         if name:
             breadcrumb.append(name)
+
+    # Append the node's own name if not already in the path
+    if str(node.id) not in path_ids:
+        breadcrumb.append(node.name)
 
     return breadcrumb
 
@@ -130,9 +140,9 @@ def unified_search(
         )
         dim_query = _apply_project_filter(dim_query, Node.project_id)
 
-        # Filter by dimension_type key if provided
+        # Filter by dimension_type name if provided (frontend passes display name)
         if dimension_type:
-            dim_query = dim_query.filter(DimensionType.key == dimension_type)
+            dim_query = dim_query.filter(DimensionType.name == dimension_type)
 
         for record, node, project, dim_type in dim_query.limit(limit).all():
             content_str = json.dumps(record.content, ensure_ascii=False) if isinstance(record.content, dict) else str(record.content)

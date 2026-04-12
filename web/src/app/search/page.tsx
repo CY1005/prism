@@ -120,7 +120,7 @@ function SearchPageInner() {
     const result = await globalSearch(q.trim(), {
       dimensionType: opts?.dimensionType,
       issueCategory: opts?.issueCategory,
-      limit: 50,
+      limit: 100,
     })
 
     setLoading(false)

@@ -129,7 +129,7 @@ def search_unified(
     dimension_type: str | None = None,
     issue_category: str | None = None,
     user_id: str = Query(..., description="User ID for permission check"),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
     """F9: Unified search across nodes, dimension records, and issues."""
