@@ -1,3 +1,5 @@
+# Prism Pain Log
+
 真实痛点记录，为 AI Code Quality Gate (B线项目) 积累素材。
 
 ---
