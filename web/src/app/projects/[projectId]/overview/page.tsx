@@ -3,8 +3,9 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useEffect } from "react"
-import { Search, Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate } from "lucide-react"
+import { Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate } from "lucide-react"
 import { ImportCSVModal } from "@/components/import-csv-modal"
+import { GlobalSearchBar } from "@/components/global-search-bar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -99,10 +100,7 @@ export default function ProjectOverviewPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card px-6">
         <Link href="/projects" className="text-lg font-semibold text-foreground hover:text-primary transition-colors">Prism</Link>
-        <Link href="/search" className="relative w-80">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder={strings.searchPlaceholder} className="pl-9 cursor-pointer" readOnly />
-        </Link>
+        <GlobalSearchBar />
         <div className="flex items-center gap-4">
           <Link href="/admin" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
             <Shield className="h-4 w-4 text-muted-foreground" />

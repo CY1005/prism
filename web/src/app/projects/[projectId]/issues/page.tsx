@@ -4,7 +4,6 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useEffect, useTransition } from "react"
 import {
-  Search,
   Bell,
   ChevronRight,
   LogOut,
@@ -13,6 +12,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react"
+import { GlobalSearchBar } from "@/components/global-search-bar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -106,10 +106,7 @@ export default function IssuesPage() {
       {/* Header */}
       <header className="flex h-14 items-center justify-between border-b border-border bg-card px-6">
         <Link href="/projects" className="text-lg font-semibold text-foreground hover:text-primary transition-colors">Prism</Link>
-        <Link href="/search" className="relative w-80">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder={detailStrings.searchPlaceholder} className="pl-9 cursor-pointer" readOnly />
-        </Link>
+        <GlobalSearchBar />
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
             <Link href="/admin">

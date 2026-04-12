@@ -126,11 +126,22 @@ def delete_knowledge_item(item_id: str, db: Session = Depends(get_db)):
 def search_unified(
     q: str = Query(..., min_length=1),
     project_id: str | None = None,
+    dimension_type: str | None = None,
+    issue_category: str | None = None,
+    user_id: str = Query(..., description="User ID for permission check"),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    """Unified search across nodes, dimension records, and knowledge items."""
-    return unified_search(db=db, query=q, project_id=project_id, limit=limit)
+    """F9: Unified search across nodes, dimension records, and issues."""
+    return unified_search(
+        db=db,
+        query=q,
+        user_id=user_id,
+        project_id=project_id,
+        dimension_type=dimension_type,
+        issue_category=issue_category,
+        limit=limit,
+    )
 
 
 @router.get("/nodes")

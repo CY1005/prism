@@ -229,3 +229,50 @@ class ProjectTemplate(Base):
     description = Column(Text)
     hierarchy_labels = Column(JSONB, nullable=False)
     dimension_keys = Column(JSONB, nullable=False)
+
+
+# ─── Issues (F7 问题沉淀) ────────────────────────────
+
+class Issue(Base):
+    __tablename__ = "issues"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    node_id = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="SET NULL"))
+    category = Column(Text, nullable=False)  # 'bug' | 'tech_debt' | 'design_flaw' | 'performance'
+    description = Column(Text, nullable=False)
+    tags = Column(JSONB, default=[])
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Competitors (F6 竞品全局实体) ────────────────────
+
+class Competitor(Base):
+    __tablename__ = "competitors"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    name = Column(Text, nullable=False)
+    website = Column(Text)
+    description = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Competitor References (F6 竞品参考记录) ──────────
+
+class CompetitorReference(Base):
+    __tablename__ = "competitor_references"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    node_id = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    competitor_id = Column(UUID(as_uuid=True), ForeignKey("competitors.id", ondelete="CASCADE"), nullable=False)
+    version = Column(Text)
+    feature_coverage = Column(Text)
+    technical_approach = Column(Text)
+    pros_and_cons = Column(JSONB)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now())

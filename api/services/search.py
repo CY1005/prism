@@ -1,4 +1,4 @@
-"""Unified search across nodes, dimension_records, and knowledge_items."""
+"""Unified search across nodes, dimension_records, and issues (F9)."""
 
 import json
 import logging
@@ -11,30 +11,95 @@ from sqlalchemy.orm import Session
 from api.models.tables import (
     Node,
     Project,
+    ProjectMember,
+    User,
     DimensionRecord,
     DimensionType,
-    KnowledgeItem,
+    Issue,
 )
+
+
+def _get_accessible_project_ids(db: Session, user_id: str) -> list[str] | None:
+    """Return project IDs the user can access, or None if platform_admin (no filter)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and user.role == "platform_admin":
+        return None  # no filter needed
+
+    rows = db.query(ProjectMember.project_id).filter(
+        ProjectMember.user_id == user_id
+    ).all()
+    return [str(r.project_id) for r in rows]
+
+
+def _build_breadcrumb(db: Session, node: Node, project_name: str) -> list[str]:
+    """Build human-readable breadcrumb from node's materialized path.
+
+    node.path stores "rootId/parentId/thisId". We look up all ancestor
+    node names and prepend the project name.
+    """
+    if not node.path:
+        return [project_name, node.name]
+
+    path_ids = [seg for seg in node.path.split("/") if seg]
+    if not path_ids:
+        return [project_name, node.name]
+
+    # Query all nodes in the path to get their names
+    ancestor_nodes = (
+        db.query(Node.id, Node.name)
+        .filter(Node.id.in_(path_ids))
+        .all()
+    )
+    id_to_name = {str(n.id): n.name for n in ancestor_nodes}
+
+    # Build ordered breadcrumb from path order
+    breadcrumb = [project_name]
+    for pid in path_ids:
+        name = id_to_name.get(pid)
+        if name:
+            breadcrumb.append(name)
+
+    return breadcrumb
 
 
 def unified_search(
     db: Session,
     query: str,
+    user_id: str,
     project_id: str | None = None,
+    dimension_type: str | None = None,
+    issue_category: str | None = None,
     limit: int = 20,
 ) -> dict:
     results = []
     q = f"%{query}%"
 
+    # Permission check: get accessible project IDs
+    accessible_ids = _get_accessible_project_ids(db, user_id)
+    if accessible_ids is not None and len(accessible_ids) == 0:
+        # User has no project access at all
+        return {"query": query, "total": 0, "results": []}
+
+    def _apply_project_filter(base_query, project_col):
+        """Apply project_id filter and permission filter to a query."""
+        if project_id:
+            base_query = base_query.filter(project_col == project_id)
+        if accessible_ids is not None:
+            base_query = base_query.filter(project_col.in_(accessible_ids))
+        return base_query
+
     # 1. Search nodes by name
     try:
         node_query = db.query(Node, Project).join(
             Project, Node.project_id == Project.id
-        ).filter(Node.name.ilike(q))
-        if project_id:
-            node_query = node_query.filter(Node.project_id == project_id)
+        ).filter(
+            Node.name.ilike(q),
+            Project.deleted_at.is_(None),
+        )
+        node_query = _apply_project_filter(node_query, Node.project_id)
 
         for node, project in node_query.limit(limit).all():
+            breadcrumb = _build_breadcrumb(db, node, project.name)
             results.append({
                 "id": str(node.id),
                 "type": "node",
@@ -43,10 +108,13 @@ def unified_search(
                 "project_id": str(node.project_id),
                 "project_name": project.name,
                 "node_path": node.path,
+                "node_id": str(node.id),
                 "dimension_type": None,
+                "issue_category": None,
+                "breadcrumb": breadcrumb,
             })
     except Exception as e:
-        logger.warning("Search query failed: %s", e)
+        logger.warning("Node search failed: %s", e)
 
     # 2. Search dimension_records by content (JSONB text cast)
     try:
@@ -55,15 +123,21 @@ def unified_search(
             .join(Node, DimensionRecord.node_id == Node.id)
             .join(Project, Node.project_id == Project.id)
             .join(DimensionType, DimensionRecord.dimension_type_id == DimensionType.id)
-            .filter(cast(DimensionRecord.content, Text).ilike(q))
+            .filter(
+                cast(DimensionRecord.content, Text).ilike(q),
+                Project.deleted_at.is_(None),
+            )
         )
-        if project_id:
-            dim_query = dim_query.filter(Node.project_id == project_id)
+        dim_query = _apply_project_filter(dim_query, Node.project_id)
+
+        # Filter by dimension_type key if provided
+        if dimension_type:
+            dim_query = dim_query.filter(DimensionType.key == dimension_type)
 
         for record, node, project, dim_type in dim_query.limit(limit).all():
-            # Extract snippet from content
             content_str = json.dumps(record.content, ensure_ascii=False) if isinstance(record.content, dict) else str(record.content)
             snippet = _extract_snippet(content_str, query, max_len=150)
+            breadcrumb = _build_breadcrumb(db, node, project.name)
 
             results.append({
                 "id": str(record.id),
@@ -73,39 +147,57 @@ def unified_search(
                 "project_id": str(node.project_id),
                 "project_name": project.name,
                 "node_path": node.path,
+                "node_id": str(node.id),
                 "dimension_type": dim_type.name,
+                "issue_category": None,
+                "breadcrumb": breadcrumb,
             })
     except Exception as e:
-        logger.warning("Search query failed: %s", e)
+        logger.warning("Dimension search failed: %s", e)
 
-    # 3. Search knowledge_items (left join Project to avoid N+1)
+    # 3. Search issues by description + tags
     try:
-        ki_query = (
-            db.query(KnowledgeItem, Project)
-            .outerjoin(Project, KnowledgeItem.project_id == Project.id)
+        issue_query = (
+            db.query(Issue, Project)
+            .join(Project, Issue.project_id == Project.id)
             .filter(
                 or_(
-                    KnowledgeItem.title.ilike(q),
-                    KnowledgeItem.content.ilike(q),
-                )
+                    Issue.description.ilike(q),
+                    cast(Issue.tags, Text).ilike(q),
+                ),
+                Project.deleted_at.is_(None),
             )
         )
-        if project_id:
-            ki_query = ki_query.filter(KnowledgeItem.project_id == project_id)
+        issue_query = _apply_project_filter(issue_query, Issue.project_id)
 
-        for ki, proj in ki_query.limit(limit).all():
+        if issue_category:
+            issue_query = issue_query.filter(Issue.category == issue_category)
+
+        for issue, project in issue_query.limit(limit).all():
+            snippet = _extract_snippet(issue.description, query, max_len=150)
+
+            # Build breadcrumb via associated node if present
+            breadcrumb = [project.name]
+            if issue.node_id:
+                assoc_node = db.query(Node).filter(Node.id == issue.node_id).first()
+                if assoc_node:
+                    breadcrumb = _build_breadcrumb(db, assoc_node, project.name)
+
             results.append({
-                "id": str(ki.id),
-                "type": "knowledge",
-                "title": ki.title,
-                "content_snippet": ki.content[:150] if ki.content else "",
-                "project_id": str(ki.project_id) if ki.project_id else None,
-                "project_name": proj.name if proj else None,
+                "id": str(issue.id),
+                "type": "issue",
+                "title": f"[{issue.category}] {issue.description[:50]}",
+                "content_snippet": snippet,
+                "project_id": str(issue.project_id),
+                "project_name": project.name,
                 "node_path": None,
+                "node_id": str(issue.node_id) if issue.node_id else None,
                 "dimension_type": None,
+                "issue_category": issue.category,
+                "breadcrumb": breadcrumb,
             })
     except Exception as e:
-        logger.warning("Search query failed: %s", e)
+        logger.warning("Issue search failed: %s", e)
 
     # Deduplicate and limit
     seen = set()
