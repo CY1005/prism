@@ -49,13 +49,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AnalysisResult } from "@/components/analysis-result"
 import {
   analyzeRequirementStream,
-  generateTestPoints,
+  generateTestPointsAI,
   saveAnalysis,
   saveTestPoints,
   type AnalysisLevel,
   type LayerResult,
   type StreamChunk,
-  type TestPointsResponse,
+  type GenerateTestPointsResponse,
+  type AITestPoint,
 } from "@/services/analyzer"
 
 // File upload types
@@ -109,7 +110,7 @@ export default function AnalysisPage() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadedImages, setUploadedImages] = useState<UploadedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
-  const [testPointsResult, setTestPointsResult] = useState<TestPointsResponse | null>(null)
+  const [testPointsResult, setTestPointsResult] = useState<GenerateTestPointsResponse | null>(null)
   const [isGeneratingPoints, setIsGeneratingPoints] = useState(false)
   const [checkedTestPoints, setCheckedTestPoints] = useState<Set<string>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
@@ -211,6 +212,10 @@ export default function AnalysisPage() {
   // Start analysis at a given level
   const startAnalysis = (level: AnalysisLevel) => {
     if (!hasContent && level === "L1") return
+    if (!nodeId) {
+      setError("请先选择要分析的功能节点（通过URL参数 ?nodeId=xxx 或从功能项页面进入）")
+      return
+    }
     setError(null)
     setCurrentLevel(level)
 
@@ -227,9 +232,8 @@ export default function AnalysisPage() {
       {
         project_id: projectId,
         requirement_text: requirementText,
-        node_id: nodeId || undefined,
-        level,
-        provider: provider !== "default" ? provider : undefined,
+        node_id: nodeId,
+        analysis_level: level,
       },
       (chunk: StreamChunk) => {
         setLayers((prev) => {
@@ -297,23 +301,34 @@ export default function AnalysisPage() {
   const handleAnalyze = () => startAnalysis("L1")
 
   const handleGenerateTestPoints = async () => {
-    const allModules = layers.flatMap((l) => l.affected_modules)
-    if (allModules.length === 0) return
+    if (!nodeId) {
+      setError("请先选择要分析的功能节点")
+      return
+    }
+    // Serialize analysis layers as the analysis_result string for the backend
+    const analysisResult = JSON.stringify(
+      layers.map((l) => ({
+        level: l.level,
+        affected_modules: l.affected_modules,
+        completeness_issues: l.completeness_issues,
+        suggestions: l.suggestions,
+      })),
+    )
     setIsGeneratingPoints(true)
     setError(null)
 
-    const result = await generateTestPoints({
+    const result = await generateTestPointsAI({
       project_id: projectId,
-      requirement_text: requirementText,
-      affected_modules: allModules.map((m) => m.node_id),
+      node_id: nodeId,
+      analysis_result: analysisResult,
       test_depth: "standard",
     })
 
     setIsGeneratingPoints(false)
     if (result.ok) {
       setTestPointsResult(result.data)
-      // Pre-check all
-      setCheckedTestPoints(new Set(result.data.test_points.map((p) => p.id)))
+      // Pre-check all — AITestPoint has no id, use index as key
+      setCheckedTestPoints(new Set(result.data.test_points.map((_, i) => String(i))))
     } else {
       setError(result.error)
     }
@@ -337,9 +352,9 @@ export default function AnalysisPage() {
     }
     if (!testPointsResult) return
     setIsSavingTestPoints(true)
-    // Backend expects full test point objects, not just IDs
-    const selectedPoints = testPointsResult.test_points.filter((p) =>
-      checkedTestPoints.has(p.id)
+    // Backend expects full test point objects — select by index
+    const selectedPoints = testPointsResult.test_points.filter((_, i) =>
+      checkedTestPoints.has(String(i))
     )
     const result = await saveTestPoints(projectId, nodeId, selectedPoints)
     setIsSavingTestPoints(false)
@@ -719,16 +734,21 @@ export default function AnalysisPage() {
               <ScrollArea className="max-h-[400px]">
                 <div className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">测试点 ({testPointsResult.coverage_summary.total})</h3>
+                    <h3 className="font-semibold">测试点 ({testPointsResult.total})</h3>
                     <div className="flex gap-2 text-xs">
-                      {Object.entries(testPointsResult.coverage_summary.by_priority).map(([k, v]) => (
-                        <Badge key={k} variant="outline" className={priorityColor[k] || ""}>{k}: {v}</Badge>
-                      ))}
+                      {["P0", "P1", "P2"].map((p) => {
+                        const count = testPointsResult.test_points.filter((tp) => tp.priority === p).length
+                        return count > 0 ? (
+                          <Badge key={p} variant="outline" className={priorityColor[p] || ""}>{p}: {count}</Badge>
+                        ) : null
+                      })}
                     </div>
                   </div>
 
                   {["P0", "P1", "P2"].map((priority) => {
-                    const points = testPointsResult.test_points.filter((p) => p.priority === priority)
+                    const points = testPointsResult.test_points
+                      .map((p, i) => ({ ...p, _idx: i }))
+                      .filter((p) => p.priority === priority)
                     if (points.length === 0) return null
                     return (
                       <div key={priority}>
@@ -738,16 +758,16 @@ export default function AnalysisPage() {
                         </div>
                         <div className="space-y-2">
                           {points.map((point) => (
-                            <Card key={point.id} className="border-border/60 p-3">
+                            <Card key={point._idx} className="border-border/60 p-3">
                               <div className="flex items-start gap-3">
                                 <Checkbox
-                                  checked={checkedTestPoints.has(point.id)}
-                                  onCheckedChange={() => toggleTestPoint(point.id)}
+                                  checked={checkedTestPoints.has(String(point._idx))}
+                                  onCheckedChange={() => toggleTestPoint(String(point._idx))}
                                   className="mt-0.5"
                                 />
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground font-mono">{point.id}</span>
+                                    <span className="text-xs text-muted-foreground font-mono">TP-{String(point._idx + 1).padStart(3, "0")}</span>
                                     <span className="text-sm font-medium">{point.title}</span>
                                   </div>
                                   <p className="text-xs text-muted-foreground mt-1">{point.description}</p>
@@ -763,9 +783,10 @@ export default function AnalysisPage() {
 
                   {/* Category Summary */}
                   <div className="flex gap-3 text-xs text-muted-foreground pt-2 border-t">
-                    {Object.entries(testPointsResult.coverage_summary.by_category).map(([k, v]) => (
-                      <span key={k}>{k}: {v}</span>
-                    ))}
+                    {["functional", "boundary", "exception", "performance"].map((cat) => {
+                      const count = testPointsResult.test_points.filter((p) => p.category === cat).length
+                      return count > 0 ? <span key={cat}>{cat}: {count}</span> : null
+                    })}
                   </div>
                 </div>
               </ScrollArea>

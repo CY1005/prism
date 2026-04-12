@@ -31,10 +31,10 @@ export interface AnalyzeRequest {
 export interface StreamAnalyzeRequest {
   project_id: string;
   requirement_text: string;
-  node_id?: string;
-  level: AnalysisLevel;
-  provider?: string;
-  context?: AnalyzeContext;
+  node_id: string;
+  analysis_level: AnalysisLevel;
+  file_content?: string;
+  provider?: string; // ignored by backend, used for future provider switching
 }
 
 export interface AffectedModule {
@@ -323,18 +323,46 @@ export async function saveAnalysis(
   });
 }
 
-// Generate test points (streaming endpoint)
+// Generate test points via AI
+export interface GenerateTestPointsRequest {
+  project_id: string;
+  node_id: string;
+  analysis_result: string;
+  test_depth: "smoke" | "standard" | "comprehensive";
+}
+
+export interface AITestPoint {
+  title: string;
+  description: string;
+  priority: string;
+  category: string;
+  steps?: string[];
+  expected_result?: string;
+}
+
+export interface GenerateTestPointsResponse {
+  test_points: AITestPoint[];
+  total: number;
+}
+
+export async function generateTestPointsAI(
+  req: GenerateTestPointsRequest,
+): Promise<AnalyzerResult<GenerateTestPointsResponse>> {
+  return post<GenerateTestPointsResponse>("/api/analyze/generate-test-points", req);
+}
+
+// Legacy test points (kept for backward compat)
 export async function generateTestPoints(
   req: TestPointsRequest,
 ): Promise<AnalyzerResult<TestPointsResponse>> {
-  return post<TestPointsResponse>("/api/analyze/generate-test-points", req);
+  return post<TestPointsResponse>("/api/test-points", req);
 }
 
 // Save test points to dimension
 export async function saveTestPoints(
   projectId: string,
   nodeId: string,
-  testPoints: TestPoint[],
+  testPoints: AITestPoint[],
 ): Promise<AnalyzerResult<{ saved_count: number; dimension_record_ids: string[]; message: string }>> {
   // Backend expects { test_points: AITestPoint[] } with full objects
   return post("/api/analyze/save-test-points", {
@@ -345,6 +373,8 @@ export async function saveTestPoints(
       description: tp.description,
       priority: tp.priority,
       category: tp.category,
+      steps: tp.steps,
+      expected_result: tp.expected_result,
     })),
   });
 }
