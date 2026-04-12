@@ -70,6 +70,7 @@ import {
   deleteReference,
   getReferencesByNode,
 } from "@/actions/competitor-references";
+import { createRelation } from "@/actions/relations";
 import {
   CompetitorReferenceList,
   AddReferenceDialog,
@@ -293,6 +294,12 @@ export function ProjectWorkspace({
   const [projectCompetitors, setProjectCompetitors] = useState<Competitor[]>([]);
   const [addRefDialog, setAddRefDialog] = useState(false);
   const [editingRef, setEditingRef] = useState<CompetitorReference | null>(null);
+
+  // F8: Relation states
+  const [addRelationDialog, setAddRelationDialog] = useState(false);
+  const [relationTargetId, setRelationTargetId] = useState("");
+  const [relationType, setRelationType] = useState("depends_on");
+  const [relationSaving, setRelationSaving] = useState(false);
 
   // Aha Moment state (F11 AC5/AC6)
   const searchParams = useSearchParams();
@@ -704,6 +711,11 @@ export function ProjectWorkspace({
                 <Progress value={completionPercent} className="h-2 w-24" />
                 <span className="text-sm font-medium">{completionPercent}%</span>
               </div>
+              <Separator orientation="vertical" className="h-5" />
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddRelationDialog(true)}>
+                <GitBranch className="h-3.5 w-3.5" />
+                添加关联
+              </Button>
             </div>
           )}
         </header>
@@ -1067,6 +1079,74 @@ export function ProjectWorkspace({
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDimDialog(false)}>取消</Button>
             <Button onClick={handleConfirmEditDimension} disabled={!editDimContent.trim()}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Relation Dialog */}
+      <Dialog open={addRelationDialog} onOpenChange={setAddRelationDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>添加关联</DialogTitle>
+            <DialogDescription>为当前功能项创建与其他节点的关联关系</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>关联类型</Label>
+              <select
+                className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={relationType}
+                onChange={(e) => setRelationType(e.target.value)}
+              >
+                <option value="depends_on">depends_on (依赖)</option>
+                <option value="related_to">related_to (相关)</option>
+                <option value="conflicts_with">conflicts_with (冲突)</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>目标节点</Label>
+              <select
+                className="flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={relationTargetId}
+                onChange={(e) => setRelationTargetId(e.target.value)}
+              >
+                <option value="">选择目标节点...</option>
+                {(function flattenTree(nodes: TreeNode[], prefix = ""): { id: string; label: string }[] {
+                  return nodes.flatMap((n) => [
+                    { id: n.id, label: prefix + n.name },
+                    ...flattenTree(n.children, prefix + n.name + " / "),
+                  ]);
+                })(tree)
+                  .filter((n) => n.id !== selectedId)
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.label}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddRelationDialog(false)}>取消</Button>
+            <Button
+              disabled={!relationTargetId || relationSaving}
+              onClick={async () => {
+                setRelationSaving(true);
+                const result = await createRelation({
+                  sourceNodeId: selectedId,
+                  targetNodeId: relationTargetId,
+                  relationType,
+                });
+                setRelationSaving(false);
+                if (result.success) {
+                  setAddRelationDialog(false);
+                  setRelationTargetId("");
+                  setRelationType("depends_on");
+                }
+              }}
+            >
+              {relationSaving ? "保存中..." : "创建关联"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

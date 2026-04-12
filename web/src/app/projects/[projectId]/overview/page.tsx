@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate } from "lucide-react"
 import { ImportCSVModal } from "@/components/import-csv-modal"
 import { GlobalSearchBar } from "@/components/global-search-bar"
+import { TreemapView } from "@/components/treemap-view"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +25,7 @@ import {
 import { detailStrings, recentUpdates } from "@/lib/project-detail-data"
 import { openclawStrings, openclawRecentUpdates } from "@/lib/openclaw-data"
 import { getProjectStats, getProjectTreeOverview, type ProjectStats, type TreeNodeOverview } from "@/services/project-stats"
+import { getPanoramaData, getProjectStats as getPanoramaStats } from "@/actions/panorama"
 import { useProjectRole } from "@/contexts/project-role-context"
 
 function getStatusColor(percent: number) {
@@ -55,6 +57,15 @@ export default function ProjectOverviewPage() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [treeLoading, setTreeLoading] = useState(true)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [activeSubTab, setActiveSubTab] = useState<"treemap" | "tree">("treemap")
+  const [panoramaData, setPanoramaData] = useState<Awaited<ReturnType<typeof getPanoramaData>> | null>(null)
+  const [panoramaLoading, setPanoramaLoading] = useState(true)
+  const [panoramaStats, setPanoramaStatsData] = useState<{
+    totalModules: number
+    totalFeatures: number
+    avgCompletion: number
+    lastUpdatedAt: Date | null
+  } | null>(null)
 
   useEffect(() => {
     setStatsLoading(true)
@@ -69,6 +80,17 @@ export default function ProjectOverviewPage() {
       setTreeLoading(false)
       if (r.ok) setRealTree(r.data.tree)
       else setApiError((prev) => prev ?? r.error)
+    })
+
+    // Load panorama data
+    setPanoramaLoading(true)
+    getPanoramaData(projectId).then((r) => {
+      setPanoramaLoading(false)
+      setPanoramaData(r)
+    })
+
+    getPanoramaStats(projectId).then((r) => {
+      if (r.success) setPanoramaStatsData(r.data)
     })
   }, [projectId])
 
@@ -229,6 +251,36 @@ export default function ProjectOverviewPage() {
         )}
       </div>
 
+      {/* Sub-tabs: 全景图 / 关系图 */}
+      <div className="flex items-center gap-4 px-6 pb-4">
+        <button
+          onClick={() => setActiveSubTab("treemap")}
+          className={`text-sm font-medium pb-1 border-b-2 transition-colors ${
+            activeSubTab === "treemap"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          全景图
+        </button>
+        <Link
+          href={`/projects/${projectId}/relation-graph`}
+          className="text-sm font-medium pb-1 border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
+        >
+          关系图
+        </Link>
+        <button
+          onClick={() => setActiveSubTab("tree")}
+          className={`text-sm font-medium pb-1 border-b-2 transition-colors ${
+            activeSubTab === "tree"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          树形视图
+        </button>
+      </div>
+
       <div className="flex flex-1 gap-6 px-6 pb-6">
         {isEmptyProject && !treeLoading && (realTree === null || realTree.length === 0) ? (
           <>
@@ -237,7 +289,6 @@ export default function ProjectOverviewPage() {
               open={csvModalOpen}
               onOpenChange={(open) => {
                 setCsvModalOpen(open)
-                // 导入完成后刷新树数据
                 if (!open) {
                   setTreeLoading(true)
                   getProjectTreeOverview(projectId).then((r) => {
@@ -260,7 +311,6 @@ export default function ProjectOverviewPage() {
                   选择一种方式初始化项目结构，快速搭建你的知识体系
                 </p>
                 <div className="grid grid-cols-3 gap-4 w-full">
-                  {/* 手动创建 */}
                   <Link
                     href={`/projects/${projectId}/product-lines/private-cloud`}
                     className="flex flex-col items-center gap-3 rounded-xl border border-border bg-background p-5 text-center hover:border-primary/50 hover:bg-primary/5 transition-all group"
@@ -273,8 +323,6 @@ export default function ProjectOverviewPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">逐步添加节点</p>
                     </div>
                   </Link>
-
-                  {/* CSV 导入 */}
                   <button
                     onClick={() => !isViewer && setCsvModalOpen(true)}
                     disabled={isViewer}
@@ -289,8 +337,6 @@ export default function ProjectOverviewPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">批量导入结构</p>
                     </div>
                   </button>
-
-                  {/* 模板初始化 */}
                   <button
                     disabled
                     title="即将推出"
@@ -308,6 +354,21 @@ export default function ProjectOverviewPage() {
               </div>
             </Card>
           </>
+        ) : activeSubTab === "treemap" ? (
+          <Card className="flex-1 border-border/60 p-6 shadow-sm">
+            {panoramaLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                加载全景图数据中...
+              </div>
+            ) : panoramaData?.success && panoramaData.data.length > 0 ? (
+              <TreemapView projectId={projectId} initialData={panoramaData.data} />
+            ) : (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                暂无全景图数据
+              </div>
+            )}
+          </Card>
         ) : (
           <Card className="flex-1 border-border/60 p-6 shadow-sm">
             {treeLoading ? (
@@ -357,7 +418,6 @@ export default function ProjectOverviewPage() {
         <Card className="w-[280px] border-border/60 p-4 shadow-sm">
           <h3 className="mb-4 font-medium text-foreground">{strings.recentUpdates}</h3>
           <div className="space-y-0">
-            {/* TODO: 接入真实最近更新 API */}
             {updates.map((update, index) => (
               <div key={index}>
                 <div className="flex gap-3 py-3">

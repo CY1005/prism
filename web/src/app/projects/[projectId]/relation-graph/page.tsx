@@ -2,106 +2,72 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  type Node,
-  type Edge,
-  type FitViewOptions,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { getModuleRelations } from "@/actions/nodes";
+import Link from "next/link";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { RelationGraph } from "@/components/relation-graph";
+import { getRelationGraph, getModuleRelationDetail } from "@/actions/relations";
 
-type GraphData = {
-  nodes: { id: string; name: string; type: string }[];
-  edges: { source: string; target: string; relation: string }[];
+type RelationType = "depends_on" | "related_to" | "conflicts_with";
+
+const relationTypeConfig: Record<
+  RelationType,
+  { label: string; dotClass: string }
+> = {
+  depends_on: { label: "依赖", dotClass: "bg-blue-400" },
+  related_to: { label: "相关", dotClass: "bg-gray-400" },
+  conflicts_with: { label: "冲突", dotClass: "bg-red-400" },
 };
-
-function computeCircularLayout(
-  nodeIds: string[],
-  radiusBase: number = 220,
-): Record<string, { x: number; y: number }> {
-  const count = nodeIds.length;
-  const radius = Math.max(radiusBase, count * 40);
-  const positions: Record<string, { x: number; y: number }> = {};
-  nodeIds.forEach((id, i) => {
-    const angle = (2 * Math.PI * i) / count - Math.PI / 2;
-    positions[id] = {
-      x: radius * Math.cos(angle),
-      y: radius * Math.sin(angle),
-    };
-  });
-  return positions;
-}
-
-const fitViewOptions: FitViewOptions = { padding: 0.2 };
 
 export default function RelationGraphPage() {
   const params = useParams();
   const projectId = params.projectId as string;
 
-  const [rfNodes, setRfNodes] = useState<Node[]>([]);
-  const [rfEdges, setRfEdges] = useState<Edge[]>([]);
+  const [graphData, setGraphData] = useState<{
+    nodes: { id: string; name: string; featureCount: number; completionPercent: number }[];
+    edges: { sourceModuleId: string; targetModuleId: string; relationType: string; count: number }[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data: GraphData = await getModuleRelations(projectId);
-
-      if (data.nodes.length === 0) {
-        setRfNodes([]);
-        setRfEdges([]);
-        return;
-      }
-
-      const positions = computeCircularLayout(data.nodes.map((n) => n.id));
-
-      const nodes: Node[] = data.nodes.map((n) => ({
-        id: n.id,
-        position: positions[n.id] ?? { x: 0, y: 0 },
-        data: { label: n.name },
-        style: {
-          background: n.type === "folder" ? "#e0f2fe" : "#f0fdf4",
-          border: "1px solid #94a3b8",
-          borderRadius: 8,
-          padding: "6px 12px",
-          fontSize: 13,
-          fontWeight: n.type === "folder" ? 600 : 400,
-          whiteSpace: "nowrap" as const,
-        },
-      }));
-
-      const edges: Edge[] = data.edges.map((e, i) => ({
-        id: `edge-${i}`,
-        source: e.source,
-        target: e.target,
-        label: e.relation,
-        labelStyle: { fontSize: 11, fill: "#64748b" },
-        labelBgStyle: { fill: "#f8fafc", fillOpacity: 0.8 },
-        style: { stroke: "#94a3b8" },
-        type: "default",
-        animated: e.relation === "depends_on",
-      }));
-
-      setRfNodes(nodes);
-      setRfEdges(edges);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+  const [filters, setFilters] = useState<Record<string, boolean>>({
+    depends_on: true,
+    related_to: true,
+    conflicts_with: true,
+  });
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    setLoading(true);
+    getRelationGraph(projectId).then((result) => {
+      setLoading(false);
+      if (result.success) {
+        setGraphData(result.data);
+      } else {
+        setError(result.error);
+      }
+    });
+  }, [projectId]);
+
+  const toggleFilter = (type: string) => {
+    setFilters((prev) => ({ ...prev, [type]: !prev[type] }));
+  };
+
+  const handleExpandModule = useCallback(
+    async (moduleId: string) => {
+      const result = await getModuleRelationDetail(moduleId);
+      if (result.success) {
+        return result.data;
+      }
+      return { features: [], relations: [] };
+    },
+    [],
+  );
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-120px)] text-muted-foreground text-sm">
+      <div className="flex items-center justify-center h-[calc(100vh-120px)] text-muted-foreground text-sm gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
         加载关系图中...
       </div>
     );
@@ -115,7 +81,7 @@ export default function RelationGraphPage() {
     );
   }
 
-  if (rfNodes.length === 0) {
+  if (!graphData || graphData.nodes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-120px)] gap-3 text-muted-foreground">
         <svg
@@ -137,18 +103,96 @@ export default function RelationGraphPage() {
     );
   }
 
+  const totalNodes = graphData.nodes.length;
+  const totalEdges = graphData.edges.length;
+
   return (
-    <div className="h-[calc(100vh-120px)] w-full">
-      <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
-        fitView
-        fitViewOptions={fitViewOptions}
-        attributionPosition="bottom-right"
-      >
-        <Background />
-        <Controls />
-      </ReactFlow>
+    <div className="px-6 py-4 space-y-4">
+      {/* Header with filters and stats */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-semibold">模块关系图</h2>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{totalNodes} 个模块</span>
+            <span>&middot;</span>
+            <span>{totalEdges} 条关联</span>
+            <span>&middot;</span>
+            <span>单击选中，双击跳转详情</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {(
+            Object.entries(relationTypeConfig) as [
+              RelationType,
+              (typeof relationTypeConfig)[RelationType],
+            ][]
+          ).map(([type, config]) => (
+            <Button
+              key={type}
+              variant={filters[type] ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => toggleFilter(type)}
+            >
+              <span className={`h-2 w-2 rounded-full ${config.dotClass}`} />
+              {config.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <svg width="24" height="2">
+            <line
+              x1="0"
+              y1="1"
+              x2="24"
+              y2="1"
+              className="stroke-blue-400"
+              strokeWidth="2"
+            />
+          </svg>
+          <span>depends_on (依赖)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <svg width="24" height="2">
+            <line
+              x1="0"
+              y1="1"
+              x2="24"
+              y2="1"
+              className="stroke-muted-foreground"
+              strokeWidth="2"
+              strokeDasharray="4 2"
+            />
+          </svg>
+          <span>related_to (相关)</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <svg width="24" height="2">
+            <line
+              x1="0"
+              y1="1"
+              x2="24"
+              y2="1"
+              className="stroke-red-400"
+              strokeWidth="2"
+            />
+          </svg>
+          <span>conflicts_with (冲突)</span>
+        </div>
+      </div>
+
+      {/* Graph */}
+      <RelationGraph
+        projectId={projectId}
+        moduleNodes={graphData.nodes}
+        moduleEdges={graphData.edges}
+        filters={filters}
+        onExpandModule={handleExpandModule}
+      />
     </div>
   );
 }
