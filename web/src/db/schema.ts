@@ -215,7 +215,9 @@ export const projectTemplates = pgTable("project_templates", {
   dimensionKeys: jsonb("dimension_keys").$type<string[]>().notNull(),
 });
 
-// ─── Issues (问题沉淀) ─────────────────────────────────
+// ─── Issues (F7 问题沉淀) ──────────────────────────────
+// ADR-012: 独立实体，按分类关联到对应维度
+// category mapping: bug→测试分析, tech_debt→工程经验, design_flaw→设计决策, performance→技术实现
 
 export const issues = pgTable("issues", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -225,14 +227,42 @@ export const issues = pgTable("issues", {
   nodeId: uuid("node_id").references(() => nodes.id, {
     onDelete: "set null",
   }),
-  type: text("type").notNull(), // 'bug' | 'tech_debt' | 'design_flaw'
-  title: text("title").notNull(),
+  category: text("category").notNull(), // 'bug' | 'tech_debt' | 'design_flaw' | 'performance'
   description: text("description").notNull(),
-  severity: text("severity").notNull().default("medium"), // 'critical' | 'high' | 'medium' | 'low'
-  status: text("status").notNull().default("open"), // 'open' | 'resolved' | 'wontfix'
-  createdBy: uuid("created_by")
+  tags: jsonb("tags").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ─── Competitors (F6 竞品全局实体) ─────────────────────
+// ADR-011: 项目级全局实体，确保名称统一、跨功能项复用
+
+export const competitors = pgTable("competitors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => projects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  website: text("website"),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─── Competitor References (F6 竞品参考记录) ──────────────
+// 功能项级竞品对标记录，引用全局竞品实体
+
+export const competitorReferences = pgTable("competitor_references", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nodeId: uuid("node_id")
+    .notNull()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  competitorId: uuid("competitor_id")
+    .notNull()
+    .references(() => competitors.id, { onDelete: "cascade" }),
+  version: text("version"), // 竞品版本号
+  featureCoverage: text("feature_coverage"), // 功能覆盖度描述
+  technicalApproach: text("technical_approach"), // 技术方案描述
+  prosAndCons: jsonb("pros_and_cons").$type<{ pros: string[]; cons: string[] }>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   PanelLeftClose,
   PanelLeft,
@@ -16,9 +16,14 @@ import {
   TestTube,
   ClipboardList,
   Building,
+  Upload,
+  Sparkles,
+  BookOpen,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -57,6 +62,28 @@ import {
   moveNode,
 } from "@/actions/nodes";
 import { createVersion } from "@/actions/versions";
+import { createIssue, getIssuesByNode, deleteIssue } from "@/actions/issues";
+import { getCompetitorsByProject, createCompetitor } from "@/actions/competitors";
+import {
+  createReference,
+  updateReference,
+  deleteReference,
+  getReferencesByNode,
+} from "@/actions/competitor-references";
+import {
+  CompetitorReferenceList,
+  AddReferenceDialog,
+  type Competitor,
+  type CompetitorReference,
+} from "@/components/competitor-reference-card";
+import {
+  IssueList,
+  AddIssueDialog,
+  CATEGORY_DIMENSION_MAP,
+  type Issue,
+  type IssueCategory,
+} from "@/components/issue-card";
+import { Separator } from "@/components/ui/separator";
 
 // ─── Icon Mapping ───────────────────────────────────────
 const dimensionIconMap: Record<string, LucideIcon> = {
@@ -257,6 +284,60 @@ export function ProjectWorkspace({
   const [editDimRecordId, setEditDimRecordId] = useState("");
   const [editDimContent, setEditDimContent] = useState("");
 
+  // F7: Issue states
+  const [nodeIssues, setNodeIssues] = useState<Issue[]>([]);
+  const [addIssueDialog, setAddIssueDialog] = useState(false);
+
+  // F6: Competitor reference states
+  const [nodeRefs, setNodeRefs] = useState<CompetitorReference[]>([]);
+  const [projectCompetitors, setProjectCompetitors] = useState<Competitor[]>([]);
+  const [addRefDialog, setAddRefDialog] = useState(false);
+  const [editingRef, setEditingRef] = useState<CompetitorReference | null>(null);
+
+  // Aha Moment state (F11 AC5/AC6)
+  const searchParams = useSearchParams();
+  const [importBanner, setImportBanner] = useState<{
+    count: number;
+    moduleName: string;
+  } | null>(null);
+
+  // First-project detection: tree has no root nodes
+  const isEmptyProject = tree.length === 0;
+
+  // Panorama prompt after first dimension record saved
+  const [showPanoramaPrompt, setShowPanoramaPrompt] = useState(false);
+
+  // Detect import redirect and auto-navigate to top module
+  useEffect(() => {
+    const imported = searchParams.get("imported");
+    const topModule = searchParams.get("topModule");
+    const count = searchParams.get("count");
+
+    if (imported === "true" && topModule) {
+      // Find the module node in tree
+      function findNode(nodes: TreeNode[], id: string): TreeNode | null {
+        for (const n of nodes) {
+          if (n.id === id) return n;
+          const found = findNode(n.children, id);
+          if (found) return found;
+        }
+        return null;
+      }
+      const moduleNode = findNode(initialTree, topModule);
+      if (moduleNode) {
+        handleSelectNode(topModule, moduleNode.type);
+        setImportBanner({
+          count: count ? parseInt(count) : 0,
+          moduleName: moduleNode.name,
+        });
+      }
+
+      // Clean up URL params without navigation
+      window.history.replaceState({}, "", `/projects/${project.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Handlers ───────────────────────────────────────
 
   const refreshPage = () => router.refresh();
@@ -267,10 +348,20 @@ export function ProjectWorkspace({
     startTransition(async () => {
       if (type === "file") {
         setFolderChildren(null);
-        const data = await getNodeWithDimensions(id);
+        const [data, issues, refs, comps] = await Promise.all([
+          getNodeWithDimensions(id),
+          getIssuesByNode(project.id, id),
+          getReferencesByNode(project.id, id),
+          getCompetitorsByProject(project.id),
+        ]);
         setNodeData(data);
+        setNodeIssues(issues as Issue[]);
+        setNodeRefs(refs as CompetitorReference[]);
+        setProjectCompetitors(comps as Competitor[]);
       } else {
         setNodeData(null);
+        setNodeIssues([]);
+        setNodeRefs([]);
         const children = await getFolderOverview(id, project.id);
         setFolderChildren(children);
       }
@@ -360,10 +451,15 @@ export function ProjectWorkspace({
       } catch {
         content = { text: addDimContent };
       }
+      // Check if project had zero dimension records before this save
+      const hadNoRecords = nodeData.records.length === 0;
       await createDimensionRecord(nodeData.node.id, addDimTypeId, content);
       setAddDimDialog(false);
       const data = await getNodeWithDimensions(nodeData.node.id);
       setNodeData(data);
+      if (hadNoRecords && data && data.records.length > 0) {
+        setShowPanoramaPrompt(true);
+      }
       refreshPage();
     });
   };
@@ -430,6 +526,73 @@ export function ProjectWorkspace({
     });
   };
 
+  // ─── F7: Issue Handlers ─────────────────────────────────
+
+  const handleAddIssue = (data: { category: string; description: string; tags: string[] }) => {
+    if (!nodeData) return;
+    startTransition(async () => {
+      const result = await createIssue(project.id, nodeData.node.id, data);
+      if (result.success) {
+        const issues = await getIssuesByNode(project.id, nodeData.node.id);
+        setNodeIssues(issues as Issue[]);
+      }
+    });
+  };
+
+  const handleDeleteIssue = (issueId: string) => {
+    if (!confirm("确定删除此问题？")) return;
+    startTransition(async () => {
+      const result = await deleteIssue(issueId);
+      if (result.success && nodeData) {
+        const issues = await getIssuesByNode(project.id, nodeData.node.id);
+        setNodeIssues(issues as Issue[]);
+      }
+    });
+  };
+
+  // ─── F6: Competitor Reference Handlers ──────────────────
+
+  const handleCreateCompetitorInline = async (data: { name: string; website?: string; description?: string }): Promise<string | null> => {
+    const result = await createCompetitor(project.id, data);
+    if (result.success) {
+      const comps = await getCompetitorsByProject(project.id);
+      setProjectCompetitors(comps as Competitor[]);
+      return result.data.id;
+    }
+    return null;
+  };
+
+  const handleAddRef = (data: {
+    competitorId: string;
+    version?: string;
+    featureCoverage?: string;
+    technicalApproach?: string;
+    prosAndCons?: { pros: string[]; cons: string[] };
+  }) => {
+    if (!nodeData) return;
+    startTransition(async () => {
+      if (editingRef) {
+        await updateReference(editingRef.reference.id, project.id, data);
+      } else {
+        await createReference(project.id, nodeData.node.id, data);
+      }
+      const refs = await getReferencesByNode(project.id, nodeData.node.id);
+      setNodeRefs(refs as CompetitorReference[]);
+      setEditingRef(null);
+    });
+  };
+
+  const handleDeleteRef = (refId: string) => {
+    if (!confirm("确定删除此竞品参考？")) return;
+    startTransition(async () => {
+      await deleteReference(refId, project.id);
+      if (nodeData) {
+        const refs = await getReferencesByNode(project.id, nodeData.node.id);
+        setNodeRefs(refs as CompetitorReference[]);
+      }
+    });
+  };
+
   // ─── Computed ─────────────────────────────────────────
 
   const breadcrumbPath = selectedId ? buildBreadcrumb(tree, selectedId) : [];
@@ -483,6 +646,13 @@ export function ProjectWorkspace({
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSidebarCollapsed(true)}>
             <PanelLeftClose className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="px-3 py-2 border-b">
+          <Button variant="outline" size="sm" className="w-full justify-start text-sm" asChild>
+            <Link href={`/projects/${project.id}/import`}>
+              <Upload className="h-4 w-4 mr-2" /> 导入文档
+            </Link>
           </Button>
         </div>
         <ScrollArea className="flex-1">
@@ -541,7 +711,55 @@ export function ProjectWorkspace({
         {/* Content */}
         <ScrollArea className="flex-1">
           <div className="mx-auto max-w-4xl space-y-4 p-6">
+            {/* Import Success Banner (Aha Moment F11 AC6) */}
+            {importBanner && (
+              <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">
+                    成功导入 {importBanner.count} 个文件到「{importBanner.moduleName}」
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    试试完善这个模块的维度信息
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-xs"
+                  onClick={() => setImportBanner(null)}
+                >
+                  知道了
+                </Button>
+              </div>
+            )}
+
             {isPending && <div className="text-center text-sm text-muted-foreground py-8">加载中...</div>}
+
+            {/* Panorama prompt after first dimension saved (AC5) */}
+            {showPanoramaPrompt && (
+              <div className="flex items-center gap-3 rounded-lg border border-green-300 bg-green-50 p-4">
+                <Sparkles className="h-5 w-5 text-green-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green-900">
+                    第一个维度已填写！查看项目全景图 →
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={`/projects/${project.id}/overview`}>
+                    查看全景图
+                  </Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-xs"
+                  onClick={() => setShowPanoramaPrompt(false)}
+                >
+                  稍后
+                </Button>
+              </div>
+            )}
 
             {/* File view: Dimension cards */}
             {!isPending && selectedType === "file" && nodeData && (
@@ -550,6 +768,11 @@ export function ProjectWorkspace({
                   const matchingRecords = nodeData.records.filter((r) => r.record.dimensionTypeId === dim.dimType.id);
                   const hasContent = matchingRecords.length > 0;
                   const DimIcon = dimensionIconMap[dim.dimType.key];
+                  // F7 AC4: 该维度关联的问题
+                  const dimIssues = nodeIssues.filter((issue) => {
+                    const cat = issue.category as IssueCategory;
+                    return CATEGORY_DIMENSION_MAP[cat] === dim.dimType.key;
+                  });
 
                   return (
                     <DimensionCard
@@ -572,6 +795,18 @@ export function ProjectWorkspace({
                               </div>
                             </div>
                           ))}
+                          {/* F7 AC4: 维度底部展示关联问题 */}
+                          {dimIssues.length > 0 && (
+                            <>
+                              <Separator className="my-2" />
+                              <IssueList
+                                issues={dimIssues}
+                                onAdd={() => setAddIssueDialog(true)}
+                                onDelete={handleDeleteIssue}
+                                showAddButton={false}
+                              />
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -582,6 +817,43 @@ export function ProjectWorkspace({
                     </DimensionCard>
                   );
                 })}
+
+                {/* F7: 关联问题 section */}
+                <Card className="border-border/60 shadow-sm p-5">
+                  <IssueList
+                    issues={nodeIssues}
+                    onAdd={() => setAddIssueDialog(true)}
+                    onDelete={handleDeleteIssue}
+                  />
+                </Card>
+
+                {/* F7: Add Issue Dialog */}
+                <AddIssueDialog
+                  open={addIssueDialog}
+                  onOpenChange={setAddIssueDialog}
+                  onSubmit={handleAddIssue}
+                />
+
+                {/* F6: 竞品参考 section */}
+                <Card className="border-border/60 shadow-sm p-5">
+                  <CompetitorReferenceList
+                    references={nodeRefs}
+                    competitors={projectCompetitors}
+                    onAdd={() => { setEditingRef(null); setAddRefDialog(true); }}
+                    onEdit={(ref) => { setEditingRef(ref); setAddRefDialog(true); }}
+                    onDelete={handleDeleteRef}
+                  />
+                </Card>
+
+                {/* F6: Add/Edit Reference Dialog */}
+                <AddReferenceDialog
+                  open={addRefDialog}
+                  onOpenChange={setAddRefDialog}
+                  competitors={projectCompetitors}
+                  onCreateCompetitor={handleCreateCompetitorInline}
+                  onSubmit={handleAddRef}
+                  editingRef={editingRef}
+                />
 
                 {/* Version Timeline */}
                 <VersionTimeline
@@ -602,10 +874,37 @@ export function ProjectWorkspace({
                   </Button>
                 </div>
                 {folderChildren.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-16">
-                    <Folder className="h-10 w-10 mx-auto mb-2 opacity-40" />
-                    <p>暂无内容，点击上方按钮添加</p>
-                  </div>
+                  <Card className="border-dashed border-2 p-8 text-center">
+                    <BookOpen className="h-12 w-12 mx-auto mb-3 text-primary/40" />
+                    <h3 className="text-lg font-semibold mb-2">从这里开始</h3>
+                    <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+                      这个模块还没有内容。你可以手动添加功能项，或导入已有文档快速填充。
+                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddChild(selectedId, "file")}
+                      >
+                        <Plus className="h-4 w-4 mr-1" /> 添加功能项
+                      </Button>
+                      <Button size="sm" asChild>
+                        <Link href={`/projects/${project.id}/import`}>
+                          <Upload className="h-4 w-4 mr-1" /> 导入文档
+                        </Link>
+                      </Button>
+                    </div>
+                    <div className="mt-6 text-left max-w-sm mx-auto">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">
+                        建议记录步骤：
+                      </p>
+                      <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+                        <li>添加功能项（如：用户登录、数据导出）</li>
+                        <li>为每个功能项填写维度信息</li>
+                        <li>逐步完善，构建完整知识图谱</li>
+                      </ol>
+                    </div>
+                  </Card>
                 ) : (
                   folderChildren.map((child) => (
                     <div
@@ -641,8 +940,33 @@ export function ProjectWorkspace({
               </div>
             )}
 
-            {/* Empty state */}
-            {!isPending && !nodeData && !folderChildren && (
+            {/* First-project welcome card (AC5) */}
+            {!isPending && isEmptyProject && !nodeData && !folderChildren && (
+              <Card className="border-dashed border-2 p-8 text-center">
+                <Sparkles className="h-12 w-12 mx-auto mb-3 text-primary/40" />
+                <h3 className="text-lg font-semibold mb-2">欢迎来到你的新项目</h3>
+                <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+                  这个项目还没有内容。你可以导入已有文档快速开始，或手动添加模块逐步构建知识体系。
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <Button size="sm" asChild>
+                    <Link href={`/projects/${project.id}/import`}>
+                      <Upload className="h-4 w-4 mr-1" /> 导入文档
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAddChild(null, "folder")}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> 手动添加模块
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* Empty state (non-empty project, no selection) */}
+            {!isPending && !isEmptyProject && !nodeData && !folderChildren && (
               <div className="text-center text-muted-foreground py-16">
                 <p>选择左侧树中的节点查看详情</p>
               </div>

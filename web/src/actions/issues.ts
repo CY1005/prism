@@ -9,37 +9,38 @@ import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 
-const VALID_TYPES = ["bug", "tech_debt", "design_flaw"] as const;
-const VALID_SEVERITIES = ["critical", "high", "medium", "low"] as const;
-const VALID_STATUSES = ["open", "resolved", "wontfix"] as const;
+const VALID_CATEGORIES = ["bug", "tech_debt", "design_flaw", "performance"] as const;
+type IssueCategory = (typeof VALID_CATEGORIES)[number];
+
+// ADR-012: 问题按分类自动关联到对应维度
+export const CATEGORY_DIMENSION_MAP: Record<IssueCategory, string> = {
+  bug: "test_analysis",
+  tech_debt: "engineering_exp",
+  design_flaw: "design_decision",
+  performance: "tech_impl",
+};
 
 export async function createIssue(
   projectId: string,
   nodeId: string | null,
   data: {
-    type: string;
-    title: string;
+    category: string;
     description: string;
-    severity?: string;
+    tags?: string[];
   },
 ): Promise<ActionResult<{ id: string }>> {
   try {
     const user = await requireAuth();
     await checkProjectAccess(user.id, projectId, "editor");
 
-    if (!data.title?.trim()) {
-      return actionError(new AppError("问题标题不能为空", "blocking", "VALIDATION_ERROR"));
+    if (!data.description?.trim()) {
+      return actionError(new AppError("问题描述不能为空", "blocking", "VALIDATION_ERROR"));
     }
 
-    if (!VALID_TYPES.includes(data.type as typeof VALID_TYPES[number])) {
-      return actionError(new AppError("无效的问题类型", "blocking", "VALIDATION_ERROR"));
+    if (!VALID_CATEGORIES.includes(data.category as IssueCategory)) {
+      return actionError(new AppError("无效的问题分类", "blocking", "VALIDATION_ERROR"));
     }
 
-    if (data.severity && !VALID_SEVERITIES.includes(data.severity as typeof VALID_SEVERITIES[number])) {
-      return actionError(new AppError("无效的严重程度", "blocking", "VALIDATION_ERROR"));
-    }
-
-    // 验证 nodeId 存在且属于该项目
     if (nodeId) {
       const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
       if (!node || node.projectId !== projectId) {
@@ -52,15 +53,13 @@ export async function createIssue(
       .values({
         projectId,
         nodeId,
-        type: data.type,
-        title: data.title.trim(),
-        description: data.description || "",
-        severity: data.severity || "medium",
-        createdBy: user.id,
+        category: data.category,
+        description: data.description.trim(),
+        tags: data.tags || [],
       })
       .returning();
 
-    logger.action("issue.create", user.id, { projectId, issueId: issue.id, type: data.type });
+    logger.action("issue.create", user.id, { projectId, issueId: issue.id, category: data.category });
     revalidatePath(`/projects/${projectId}`);
 
     return actionSuccess({ id: issue.id });
@@ -69,45 +68,12 @@ export async function createIssue(
   }
 }
 
-export async function getIssues(
-  projectId: string,
-  filters?: {
-    nodeId?: string;
-    type?: string;
-    status?: string;
-  },
-) {
-  const user = await requireAuth();
-  await checkProjectAccess(user.id, projectId, "viewer");
-
-  const conditions = [eq(issues.projectId, projectId)];
-
-  if (filters?.nodeId) {
-    conditions.push(eq(issues.nodeId, filters.nodeId));
-  }
-  if (filters?.type) {
-    conditions.push(eq(issues.type, filters.type));
-  }
-  if (filters?.status) {
-    conditions.push(eq(issues.status, filters.status));
-  }
-
-  const result = await db
-    .select()
-    .from(issues)
-    .where(and(...conditions));
-
-  return result;
-}
-
 export async function updateIssue(
   issueId: string,
   data: {
-    title?: string;
+    category?: string;
     description?: string;
-    type?: string;
-    severity?: string;
-    status?: string;
+    tags?: string[];
   },
 ): Promise<ActionResult> {
   try {
@@ -120,30 +86,20 @@ export async function updateIssue(
 
     await checkProjectAccess(user.id, issue.projectId, "editor");
 
-    if (data.title !== undefined && data.title.trim() === "") {
-      return actionError(new AppError("问题标题不能为空", "blocking", "VALIDATION_ERROR"));
+    if (data.description !== undefined && data.description.trim() === "") {
+      return actionError(new AppError("问题描述不能为空", "blocking", "VALIDATION_ERROR"));
     }
 
-    if (data.type && !VALID_TYPES.includes(data.type as typeof VALID_TYPES[number])) {
-      return actionError(new AppError("无效的问题类型", "blocking", "VALIDATION_ERROR"));
-    }
-
-    if (data.severity && !VALID_SEVERITIES.includes(data.severity as typeof VALID_SEVERITIES[number])) {
-      return actionError(new AppError("无效的严重程度", "blocking", "VALIDATION_ERROR"));
-    }
-
-    if (data.status && !VALID_STATUSES.includes(data.status as typeof VALID_STATUSES[number])) {
-      return actionError(new AppError("无效的状态", "blocking", "VALIDATION_ERROR"));
+    if (data.category && !VALID_CATEGORIES.includes(data.category as IssueCategory)) {
+      return actionError(new AppError("无效的问题分类", "blocking", "VALIDATION_ERROR"));
     }
 
     await db
       .update(issues)
       .set({
-        ...(data.title !== undefined && { title: data.title.trim() }),
-        ...(data.description !== undefined && { description: data.description }),
-        ...(data.type !== undefined && { type: data.type }),
-        ...(data.severity !== undefined && { severity: data.severity }),
-        ...(data.status !== undefined && { status: data.status }),
+        ...(data.category !== undefined && { category: data.category }),
+        ...(data.description !== undefined && { description: data.description.trim() }),
+        ...(data.tags !== undefined && { tags: data.tags }),
         updatedAt: new Date(),
       })
       .where(eq(issues.id, issueId));
@@ -177,4 +133,28 @@ export async function deleteIssue(issueId: string): Promise<ActionResult> {
   } catch (error) {
     return actionError(error);
   }
+}
+
+export async function getIssuesByNode(projectId: string, nodeId: string) {
+  const user = await requireAuth();
+  await checkProjectAccess(user.id, projectId, "viewer");
+
+  return db
+    .select()
+    .from(issues)
+    .where(and(eq(issues.projectId, projectId), eq(issues.nodeId, nodeId)));
+}
+
+export async function getIssuesByCategory(projectId: string, category: string) {
+  const user = await requireAuth();
+  await checkProjectAccess(user.id, projectId, "viewer");
+
+  if (!VALID_CATEGORIES.includes(category as IssueCategory)) {
+    return [];
+  }
+
+  return db
+    .select()
+    .from(issues)
+    .where(and(eq(issues.projectId, projectId), eq(issues.category, category)));
 }

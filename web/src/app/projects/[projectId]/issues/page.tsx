@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useTransition } from "react"
 import {
   Search,
   Bell,
@@ -11,7 +11,6 @@ import {
   Settings,
   Shield,
   Plus,
-  Pencil,
   Trash2,
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
@@ -19,8 +18,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
@@ -38,13 +35,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -53,108 +43,41 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { detailStrings } from "@/lib/project-detail-data"
-import { getIssues, createIssue, updateIssue, deleteIssue } from "@/actions/issues"
+import { createIssue, getIssuesByNode, getIssuesByCategory, deleteIssue } from "@/actions/issues"
 import { useProjectRole } from "@/contexts/project-role-context"
-
-type Issue = {
-  id: string
-  projectId: string
-  nodeId: string | null
-  type: string
-  title: string
-  description: string
-  severity: string
-  status: string
-  createdBy: string
-  createdAt: Date
-  updatedAt: Date
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  bug: "Bug",
-  tech_debt: "技术债务",
-  design_flaw: "设计缺陷",
-}
-
-const SEVERITY_LABELS: Record<string, string> = {
-  critical: "严重",
-  high: "高",
-  medium: "中",
-  low: "低",
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  open: "待处理",
-  resolved: "已解决",
-  wontfix: "不修复",
-}
-
-function severityBadgeClass(severity: string) {
-  switch (severity) {
-    case "critical":
-      return "bg-red-100 text-red-700 border-red-200"
-    case "high":
-      return "bg-orange-100 text-orange-700 border-orange-200"
-    case "medium":
-      return "bg-yellow-100 text-yellow-700 border-yellow-200"
-    case "low":
-      return "bg-blue-100 text-blue-700 border-blue-200"
-    default:
-      return ""
-  }
-}
-
-function statusBadgeClass(status: string) {
-  switch (status) {
-    case "open":
-      return "bg-red-50 text-red-600 border-red-200"
-    case "resolved":
-      return "bg-green-50 text-green-600 border-green-200"
-    case "wontfix":
-      return "bg-gray-50 text-gray-600 border-gray-200"
-    default:
-      return ""
-  }
-}
-
-function typeBadgeClass(type: string) {
-  switch (type) {
-    case "bug":
-      return "bg-red-50 text-red-700 border-red-200"
-    case "tech_debt":
-      return "bg-purple-50 text-purple-700 border-purple-200"
-    case "design_flaw":
-      return "bg-amber-50 text-amber-700 border-amber-200"
-    default:
-      return ""
-  }
-}
+import {
+  AddIssueDialog,
+  CATEGORY_CONFIG,
+  type Issue,
+  type IssueCategory,
+} from "@/components/issue-card"
 
 export default function IssuesPage() {
   const params = useParams()
   const projectId = params.projectId as string
   const { isViewer } = useProjectRole()
+  const [isPending, startTransition] = useTransition()
 
   const [issues, setIssues] = useState<Issue[]>([])
   const [loading, setLoading] = useState(true)
-  const [filterType, setFilterType] = useState<string>("all")
-  const [filterSeverity, setFilterSeverity] = useState<string>("all")
-  const [filterStatus, setFilterStatus] = useState<string>("all")
-
+  const [filterCategory, setFilterCategory] = useState<string>("all")
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingIssue, setEditingIssue] = useState<Issue | null>(null)
-  const [formTitle, setFormTitle] = useState("")
-  const [formDescription, setFormDescription] = useState("")
-  const [formType, setFormType] = useState("bug")
-  const [formSeverity, setFormSeverity] = useState("medium")
-  const [formNodeId, setFormNodeId] = useState("")
-  const [saving, setSaving] = useState(false)
 
   const loadIssues = async () => {
     setLoading(true)
     try {
-      const data = await getIssues(projectId)
-      setIssues(data as Issue[])
+      if (filterCategory !== "all") {
+        const data = await getIssuesByCategory(projectId, filterCategory)
+        setIssues(data as Issue[])
+      } else {
+        // Load all categories
+        const results = await Promise.all(
+          (["bug", "tech_debt", "design_flaw", "performance"] as const).map(
+            (cat) => getIssuesByCategory(projectId, cat)
+          )
+        )
+        setIssues(results.flat() as Issue[])
+      }
     } catch {
       // ignore
     }
@@ -163,70 +86,18 @@ export default function IssuesPage() {
 
   useEffect(() => {
     loadIssues()
-  }, [projectId])
+  }, [projectId, filterCategory])
 
-  const filteredIssues = issues.filter((issue) => {
-    if (filterType !== "all" && issue.type !== filterType) return false
-    if (filterSeverity !== "all" && issue.severity !== filterSeverity) return false
-    if (filterStatus !== "all" && issue.status !== filterStatus) return false
-    return true
-  })
-
-  const openCreateDialog = () => {
-    setEditingIssue(null)
-    setFormTitle("")
-    setFormDescription("")
-    setFormType("bug")
-    setFormSeverity("medium")
-    setFormNodeId("")
-    setDialogOpen(true)
-  }
-
-  const openEditDialog = (issue: Issue) => {
-    setEditingIssue(issue)
-    setFormTitle(issue.title)
-    setFormDescription(issue.description)
-    setFormType(issue.type)
-    setFormSeverity(issue.severity)
-    setFormNodeId(issue.nodeId || "")
-    setDialogOpen(true)
-  }
-
-  const handleSave = async () => {
-    if (!formTitle.trim()) return
-    setSaving(true)
-    try {
-      if (editingIssue) {
-        await updateIssue(editingIssue.id, {
-          title: formTitle,
-          description: formDescription,
-          type: formType,
-          severity: formSeverity,
-        })
-      } else {
-        await createIssue(projectId, formNodeId || null, {
-          title: formTitle,
-          description: formDescription,
-          type: formType,
-          severity: formSeverity,
-        })
-      }
-      setDialogOpen(false)
+  const handleSave = (data: { category: string; description: string; tags: string[] }) => {
+    startTransition(async () => {
+      await createIssue(projectId, null, data)
       await loadIssues()
-    } catch {
-      // ignore
-    }
-    setSaving(false)
+    })
   }
 
   const handleDelete = async (issueId: string) => {
     if (!confirm("确认删除该问题？")) return
     await deleteIssue(issueId)
-    await loadIssues()
-  }
-
-  const handleStatusChange = async (issueId: string, newStatus: string) => {
-    await updateIssue(issueId, { status: newStatus })
     await loadIssues()
   }
 
@@ -320,43 +191,21 @@ export default function IssuesPage() {
           {/* Control Bar */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <Select value={filterType} onValueChange={(v) => v && setFilterType(v)}>
+              <Select value={filterCategory} onValueChange={(v) => v && setFilterCategory(v)}>
                 <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="类型" />
+                  <SelectValue placeholder="分类" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">全部类型</SelectItem>
+                  <SelectItem value="all">全部分类</SelectItem>
                   <SelectItem value="bug">Bug</SelectItem>
-                  <SelectItem value="tech_debt">技术债务</SelectItem>
+                  <SelectItem value="tech_debt">技术债</SelectItem>
                   <SelectItem value="design_flaw">设计缺陷</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterSeverity} onValueChange={(v) => v && setFilterSeverity(v)}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="严重程度" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部严重度</SelectItem>
-                  <SelectItem value="critical">严重</SelectItem>
-                  <SelectItem value="high">高</SelectItem>
-                  <SelectItem value="medium">中</SelectItem>
-                  <SelectItem value="low">低</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterStatus} onValueChange={(v) => v && setFilterStatus(v)}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="状态" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部状态</SelectItem>
-                  <SelectItem value="open">待处理</SelectItem>
-                  <SelectItem value="resolved">已解决</SelectItem>
-                  <SelectItem value="wontfix">不修复</SelectItem>
+                  <SelectItem value="performance">性能</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <Button
-              onClick={openCreateDialog}
+              onClick={() => setDialogOpen(true)}
               disabled={isViewer}
               title={isViewer ? "查看者无编辑权限" : undefined}
             >
@@ -370,75 +219,55 @@ export default function IssuesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="font-medium">标题</TableHead>
-                  <TableHead className="font-medium w-24">类型</TableHead>
-                  <TableHead className="font-medium w-24">严重度</TableHead>
-                  <TableHead className="font-medium w-24">状态</TableHead>
+                  <TableHead className="font-medium">描述</TableHead>
+                  <TableHead className="font-medium w-24">分类</TableHead>
+                  <TableHead className="font-medium w-32">标签</TableHead>
                   <TableHead className="font-medium w-40">创建时间</TableHead>
-                  <TableHead className="font-medium w-28">操作</TableHead>
+                  <TableHead className="font-medium w-20">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       加载中...
                     </TableCell>
                   </TableRow>
-                ) : filteredIssues.length === 0 ? (
+                ) : issues.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       暂无问题记录
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredIssues.map((issue) => (
-                    <TableRow key={issue.id}>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium">{issue.title}</span>
-                          {issue.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{issue.description}</p>
+                  issues.map((issue) => {
+                    const cat = issue.category as IssueCategory
+                    const config = CATEGORY_CONFIG[cat]
+                    return (
+                      <TableRow key={issue.id}>
+                        <TableCell>
+                          <span className="text-sm">{issue.description}</span>
+                        </TableCell>
+                        <TableCell>
+                          {config && (
+                            <Badge className={`${config.bgColor} ${config.textColor} hover:${config.bgColor} text-xs`}>
+                              {config.label}
+                            </Badge>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={typeBadgeClass(issue.type)}>
-                          {TYPE_LABELS[issue.type] || issue.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={severityBadgeClass(issue.severity)}>
-                          {SEVERITY_LABELS[issue.severity] || issue.severity}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Select value={issue.status} onValueChange={(v) => v && handleStatusChange(issue.id, v)}>
-                          <SelectTrigger className="h-7 w-[90px] text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">待处理</SelectItem>
-                            <SelectItem value="resolved">已解决</SelectItem>
-                            <SelectItem value="wontfix">不修复</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(issue.createdAt).toLocaleDateString("zh-CN")}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => openEditDialog(issue)}
-                            disabled={isViewer}
-                            title={isViewer ? "查看者无编辑权限" : undefined}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 flex-wrap">
+                            {issue.tags?.map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(issue.createdAt).toLocaleDateString("zh-CN")}
+                        </TableCell>
+                        <TableCell>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -449,10 +278,10 @@ export default function IssuesPage() {
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
@@ -460,63 +289,12 @@ export default function IssuesPage() {
         </div>
       </ScrollArea>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingIssue ? "编辑问题" : "新建问题"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>标题</Label>
-              <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} placeholder="问题标题" />
-            </div>
-            <div className="space-y-2">
-              <Label>描述</Label>
-              <Textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="问题描述" rows={3} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>类型</Label>
-                <Select value={formType} onValueChange={(v) => v && setFormType(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bug">Bug</SelectItem>
-                    <SelectItem value="tech_debt">技术债务</SelectItem>
-                    <SelectItem value="design_flaw">设计缺陷</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>严重度</Label>
-                <Select value={formSeverity} onValueChange={(v) => v && setFormSeverity(v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">严重</SelectItem>
-                    <SelectItem value="high">高</SelectItem>
-                    <SelectItem value="medium">中</SelectItem>
-                    <SelectItem value="low">低</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>关联节点 ID（可选）</Label>
-              <Input value={formNodeId} onChange={(e) => setFormNodeId(e.target.value)} placeholder="UUID 格式的节点 ID" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
-            <Button onClick={handleSave} disabled={saving || !formTitle.trim()}>
-              {saving ? "保存中..." : "保存"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Create Dialog */}
+      <AddIssueDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSubmit={handleSave}
+      />
     </div>
   )
 }

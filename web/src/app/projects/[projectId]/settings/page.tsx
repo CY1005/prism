@@ -52,8 +52,18 @@ import {
 } from "@/actions/project-settings"
 import { logout, getSessionUser } from "@/actions/auth"
 import { useProjectRole } from "@/contexts/project-role-context"
+import {
+  getCompetitorsByProject,
+  createCompetitor,
+  updateCompetitor,
+  deleteCompetitor,
+} from "@/actions/competitors"
+import {
+  CompetitorManagement,
+  type Competitor,
+} from "@/components/competitor-reference-card"
 
-type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai"
+type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai" | "competitors"
 
 type ProjectData = {
   id: string
@@ -100,6 +110,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
   const [saving, setSaving] = useState(false)
   const [userName, setUserName] = useState("")
   const [userInitials, setUserInitials] = useState("")
+  const [competitorsList, setCompetitorsList] = useState<Competitor[]>([])
 
   useEffect(() => {
     getProject(projectId).then((p) => {
@@ -118,6 +129,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     })
     loadMembers()
     loadDimensions()
+    loadCompetitors()
     getSessionUser().then((user) => {
       if (user) {
         setUserName(user.name)
@@ -142,6 +154,30 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     } catch {
       // ignore
     }
+  }
+
+  const loadCompetitors = async () => {
+    try {
+      const comps = await getCompetitorsByProject(projectId)
+      setCompetitorsList(comps as Competitor[])
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleCreateCompetitor = async (data: { name: string; website?: string; description?: string }) => {
+    const result = await createCompetitor(projectId, data)
+    if (result.success) await loadCompetitors()
+  }
+
+  const handleUpdateCompetitor = async (id: string, data: { name?: string; website?: string; description?: string }) => {
+    const result = await updateCompetitor(id, data)
+    if (result.success) await loadCompetitors()
+  }
+
+  const handleDeleteCompetitor = async (id: string) => {
+    const result = await deleteCompetitor(id)
+    if (result.success) await loadCompetitors()
   }
 
   const handleToggleDimension = (configId: number, enabled: boolean) => {
@@ -251,13 +287,14 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
 
       <div className="flex">
         <div className="w-[200px] border-r border-border p-4 space-y-1">
-          {(["basic", "dimensions", "hierarchy", "members", "ai"] as TabType[]).map((tab) => {
+          {(["basic", "dimensions", "hierarchy", "members", "ai", "competitors"] as TabType[]).map((tab) => {
             const labels: Record<TabType, string> = {
               basic: "基本信息",
               dimensions: "维度管理",
               hierarchy: "层级配置",
               members: "成员管理",
               ai: "AI配置",
+              competitors: "竞品管理",
             }
             return (
               <button
@@ -550,6 +587,17 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                 </Button>
               </div>
             </div>
+          )}
+
+          {/* Competitors Management Tab */}
+          {activeTab === "competitors" && (
+            <CompetitorManagement
+              competitors={competitorsList}
+              onCreateCompetitor={handleCreateCompetitor}
+              onUpdateCompetitor={handleUpdateCompetitor}
+              onDeleteCompetitor={handleDeleteCompetitor}
+              canAdmin={canAdmin}
+            />
           )}
         </div>
       </div>
