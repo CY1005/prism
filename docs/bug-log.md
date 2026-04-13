@@ -289,3 +289,93 @@ error TS2339: Property 'xxx' does not exist on type 'NodeData'
    - AI 生成代码后自动跑 `tsc --noEmit`
    - 依赖 major version 升级后 grep 常见 breaking change 模式
    - 手动类型定义处标注 `// TODO: derive from schema`
+
+---
+
+## BUG-033 ~ BUG-036: v0.1 原型页面修复（4 个）
+
+- **日期**: 2026-04-11
+- **来源**: 原型验收
+- **状态**: 全部已修复
+
+| ID | 问题 | Commit | 修复 |
+|----|------|--------|------|
+| BUG-033 | 功能档案页缺少左侧功能树导航 | `df14846` | 加 FeatureTree 组件 + treeData |
+| BUG-034 | AI 分析按钮无法直接点击（需先输入内容） | `df14846` | 默认填入示例需求文本 |
+| BUG-035 | 项目概览页导入链接 404（/import 应为 /import-ai） | `df14846` | 链接路径修正 |
+| BUG-036 | 功能树空白（Next.js 16 Turbopack 下 useEffect+mounted 守卫不渲染） | `0ab0c9c` | 改为 useState 直接初始化展开节点 |
+
+---
+
+## BUG-037 ~ BUG-038: v0.1 Tab 导航 + 默认状态修复（2 个）
+
+- **日期**: 2026-04-11
+- **来源**: UI 一致性审查
+- **状态**: 全部已修复
+
+| ID | 问题 | Commit | 修复 |
+|----|------|--------|------|
+| BUG-037 | 12 个页面 Tab 导航不统一（不同页面 Tab 项和顺序不一致） | `0fd9b0b` | 统一 Tab 导航组件 |
+| BUG-038 | 需求工作台和 AI 分析页面打开后空白，需手动操作才有内容 | `0551567` | 默认 isAnalyzed=true，打开直接展示分析结果 |
+
+---
+
+## BUG-039 ~ BUG-042: v0.2 Phase 5 — F9 搜索 4 个 bug
+
+- **日期**: 2026-04-12
+- **来源**: 搜索功能测试
+- **Commit**: `707beff`
+- **状态**: 全部已修复
+
+| ID | 优先级 | 问题 | 修复 |
+|----|--------|------|------|
+| BUG-039 | P1 | 搜索结果面包屑缺少节点自身名称（path 不含 self） | 追加 node.name |
+| BUG-040 | P2 | 非 UUID 的 user_id 导致 500 崩溃（应返回空结果） | 异常处理 |
+| BUG-041 | P2 | dimension_type 按 key 过滤，前端显示 display name 不匹配 | 改为按 display name 过滤 |
+| BUG-042 | P3 | 搜索结果 limit 50 太少，频繁截断 | limit 提到 100，API 上限放到 200 |
+
+---
+
+## BUG-043 ~ BUG-050: v0.3 Phase 7 — Agent 并行开发契约漂移（8 个）
+
+- **日期**: 2026-04-12
+- **来源**: QA 验证 (Round 1: 6 个) + Team Lead 逐字段审查 (Round 2: 2 个)
+- **Commit**: `5eb01e8` (Round 1 修复) + `f60fd2b` (Round 2 修复)
+- **状态**: 7 已修复，1 遗留
+- **详细记录**: `docs/test-checklist-v0.3-phase7.md`
+
+### Round 1 — QA 发现的 6 个契约不匹配
+
+| ID | AC | 问题 | 修复 |
+|----|-----|------|------|
+| BUG-043 | F13 AC5 | saveAnalysis: 前端发 `{ layers }`, 后端要 `{ analysis_result: str }` → 422 | 前端序列化 layers 为 JSON string |
+| BUG-044 | F13 AC7 | saveTestPoints: 前端发 `{ test_point_ids }`, 后端要 `{ test_points: AITestPoint[] }` → 422 | 前端改发完整对象 |
+| BUG-045 | F12 AC1 | generateComparison: 前端发 `{ feature_name, competitors: string[] }`, 后端要 `{ node_ids: UUID[], competitor_ids: UUID[] }` → 422 | 前端改用 UUID-based request |
+| BUG-046 | F12 AC5 | exportComparison: URL 不匹配 `GET ?project_id=` vs `GET /{id}/export` → 404 | 前端改用 path param |
+| BUG-047 | F12 AC6 | backfillRow: URL 和 payload 不匹配 → 404/422 | 前端改用 path param + UUID payload |
+| BUG-048 | F12 AC4 | highlight: 前端用 `ComparisonCell.highlight`, 后端用 `ComparisonCell.score` → 高亮不生效 | 前端改用 score 判断 |
+
+### Round 2 — 逐字段审查发现的 2 个运行时 bug
+
+| ID | AC | 问题 | 修复 |
+|----|-----|------|------|
+| BUG-049 | F13 AC2 | SSE 字段名: 前端发 `level`, 后端要 `analysis_level` → L2/L3 永远不触发; `node_id` optional vs required → 422 | 字段名对齐 + node_id 改 required |
+| BUG-050 | F13 AC6 | generateTestPoints: 前端发 `{ requirement_text, affected_modules }`, 后端要 `{ node_id, analysis_result }` → 完全不同 schema → 422 | 新建 `generateTestPointsAI()` 匹配后端 schema |
+
+### 遗留
+
+| — | F13 AC4 | 关系图高亮: affected modules 未传递给 relation-graph 组件 | 需跨页面通信，计划后续 Phase 实现 |
+
+### 根因分析
+
+**为什么 8 个 bug？** Backend 和 Frontend Agent 并行开发，没有共享 API contract 文件（如 OpenAPI spec）。两边各自基于 PRD 理解独立实现，字段命名、类型、URL 结构全靠默契 → 不可能对齐。
+
+**为什么 Round 1 修完又漏 2 个？** Round 1 修的是表层（URL path, 顶层字段名）。Round 2 的 `level` vs `analysis_level` 和 `generateTestPoints` 整个 schema 差异需要逐字段比对请求体才能发现。
+
+### 教训
+
+Agent Team 并行开发模式下，**必须有 contract-first 机制**：
+1. Backend 先输出 OpenAPI schema（FastAPI 自动生成）
+2. Frontend 基于 schema 生成 TypeScript 类型
+3. 或者 Team Lead 在分发任务前先定义共享 API contract 文件
+4. QA 验证应包含 "逐字段比对请求/响应 schema" 步骤，不能只看 URL 和顶层字段

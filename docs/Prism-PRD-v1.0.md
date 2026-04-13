@@ -920,5 +920,3 @@ version_records 表扩展：
 | Notion | 过度灵活 |
 | Jira | 膨胀 |
 | Wiki | 没人看 |
-
----
