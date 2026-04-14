@@ -1,112 +1,135 @@
 # Prism
 
-A project-based product lifecycle analysis platform.
+**Feature-centric product knowledge management platform** — organize product analysis, technical decisions, testing insights, and competitive benchmarking around feature modules instead of scattered tools.
 
-Organize product analysis, technical implementation, testing insights, competitive benchmarking, and engineering experience around feature modules — with full visibility into system structure and data flow.
+Built as a full-stack AI-powered web application using VibeCoding methodology (AI generates, human verifies).
 
-## Project Structure
+## The Problem
 
-```
-prism/
-├── docs/
-│   ├── PRD.md              # Product requirements (link to knowledge base)
-│   ├── roadmap.md          # 4-month iteration plan with IDAKE methodology
-│   ├── stitch-prompt.md    # Stitch/v0 prototype generation prompts
-│   └── adr/                # 9 Architecture Decision Records
-│       ├── 001-frontend-framework.md
-│       ├── 002-database-and-orm.md
-│       ├── 003-server-actions-vs-api-routes.md
-│       ├── 004-ai-service-layer.md
-│       ├── 005-auth-strategy.md
-│       ├── 006-state-management.md
-│       ├── 007-pgvector-deferred.md
-│       ├── 008-project-ownership-evolution.md
-│       └── 009-react-flow-state-separation.md
-├── design/
-│   └── v0-prototype-v2/    # v0 generated prototype (7 pages)
-├── src/                    # Source code (development phase)
-└── scripts/                # Utility scripts
-```
-
-## Status
-
-**Phase: Prototype Design**
-
-- [x] Pain point analysis
-- [x] Core requirements discussion
-- [x] Data model design (node tree + dimension registry + JSONB)
-- [x] Market research (5 categories, no direct competitor)
-- [x] Architecture scenario testing (10 scenarios passed)
-- [x] PRD v0.2 (with AC acceptance criteria + IDAKE methodology)
-- [x] 9 ADRs (Architecture Decision Records)
-- [x] Tech stack confirmed
-- [x] 4-month iteration plan (Spec-Driven + Harness + Builder-Breaker)
-- [x] Prototype v2: 7 pages (login, projects, overview, feature detail, search, settings, admin)
-- [ ] Prototype: remaining 5 views (product line, module, analysis, comparison, test detail)
-- [ ] Development
-- [ ] Deployment
-
-## Tech Stack (Confirmed)
-
-| Layer | Choice | Rationale |
-|-------|--------|-----------|
-| Frontend | Next.js 15 (App Router) | React Flow dependency; best AI code generation quality |
-| UI | shadcn/ui + Tailwind CSS | v0 native output; code-in-your-hands |
-| Visualization | React Flow | Node graphs, relation maps |
-| State | TanStack Query + Zustand | Server data vs UI state separation (ADR-006) |
-| Backend | Server Actions (primary) | Single-language full-stack; API Routes only for webhook/stream (ADR-003) |
-| ORM | Drizzle ORM | SQL-first, JSONB natural (ADR-002) |
-| Database | PostgreSQL 16+ | JSONB + full-text search; pgvector deferred to v0.3 (ADR-007) |
-| Auth | Auth.js v5 Credentials | Minimal config; password hash is dev responsibility (ADR-005) |
-| AI | Custom LLMProvider | Not locked to Vercel AI SDK (ADR-004) |
-| Deploy | Docker Compose | Single machine |
-
-## Development Methodology
-
-**IDAKE 5-Step Loop** for every feature:
-
-```
-1. Spec    → Write AC (3-10 per feature)
-2. Build   → Claude Code generates code based on AC
-3. Break   → CY verifies against AC, finds edge cases
-4. Fix     → AI fixes → CY re-verifies → loop until all AC pass
-5. Evolve  → Lessons learned recorded in Prism itself (dogfooding)
-```
-
-**Harness Mechanisms:** progress file for session recovery, doom loop detection (>6 edits = stop), architecture guardrails per version.
-
-## Prototype Pages
-
-| Page | Status | Route |
-|------|--------|-------|
-| Login | ✅ | /login |
-| Project List | ✅ | /projects |
-| Project Overview | ✅ | /projects/[id] |
-| Feature Detail (archive) | ✅ | / |
-| Search Results | ✅ | /search |
-| Project Settings | ✅ | /projects/[id]/settings |
-| Admin Dashboard | ✅ | /admin |
-| Product Line Overview | Pending | /projects/[id]/product-lines/[plId] |
-| Module Overview | Pending | /projects/[id]/modules/[moduleId] |
-| Requirement Analysis | Pending | /projects/[id]/analysis |
-| Competitive Comparison | Pending | /projects/[id]/comparison |
-| Test Analysis Detail | Pending | (expanded card in feature detail) |
+In complex products like AI cloud platforms, knowledge about a single feature is fragmented across 5-6 tools (Confluence, Notion, Jira, Feishu, local notes). Prism consolidates everything into one structured view per feature module.
 
 ## Key Features
 
-- **Feature module as atomic unit** — all info organized around feature modules
-- **8 dimension cards** — description, user scenarios, tech implementation, design decisions, engineering experience, testing analysis, requirement analysis, competitive reference
-- **Version evolution timeline** — track feature changes across releases
-- **Requirement analysis + test point generation** — AI analyzes requirements, generates test cases, one-click import to test dimension
-- **Competitive comparison matrix** — cross-competitor feature comparison with AI conclusions
-- **Pluggable AI** — configure different AI providers per project (Claude/Codex/Kimi)
-- **Full visibility** — system structure, data flow, and relationships are all visualized
+| Category | Features |
+|----------|----------|
+| **Core** | Feature module tree with configurable hierarchy, 8-dimension archive page (description, user scenarios, tech implementation, design decisions, engineering experience, test analysis, requirement analysis, competitive reference), version evolution timeline |
+| **Analysis** | AI requirement analysis (impact scope + completeness + rationality + test point generation), competitive comparison matrix, project panorama view |
+| **AI-Powered** | Pluggable AI providers (Claude / DeepSeek / custom), AI smart import (upload docs -> AI extracts & categorizes -> human review -> batch import), AI snapshot generation, hybrid search (keyword + semantic via pgvector) |
+| **Collaboration** | Team/space management, RBAC (admin/editor/viewer), member invitation, import/export (Markdown/JSON/CSV) |
 
-## Version Plan
+20 features (F1-F20) fully implemented and tested.
 
-| Version | Timeline | Goal |
-|---------|----------|------|
-| v0.1 MVP | Month 1 | Record, browse, visualize structure |
-| v0.2 | Month 2 | Analyze, compare, AI-powered |
-| v0.3 | Month 3 | AI-assisted input, semantic search |
-| v1.0 | Month 4 | Team support, polish |
+## Tech Stack
+
+```
+Frontend:  Next.js 15 (App Router) + React 19 + TypeScript
+UI:        shadcn/ui + Tailwind CSS 4 + React Flow (relation graphs)
+State:     TanStack Query + Zustand
+Backend:   FastAPI + SQLAlchemy 2.0 + Pydantic 2
+Database:  PostgreSQL 16 + pgvector (semantic search)
+Auth:      Auth.js v5 (Credentials)
+ORM:       Drizzle ORM (frontend) + SQLAlchemy (backend)
+Deploy:    Docker Compose
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│              Next.js 15 (App Router)         │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────┐ │
+│  │ React UI │ │ Server   │ │ Auth.js v5   │ │
+│  │ shadcn   │ │ Actions  │ │ JWT + RBAC   │ │
+│  │ React    │ │ (CRUD)   │ │              │ │
+│  │ Flow     │ └────┬─────┘ └──────────────┘ │
+│  └──────────┘      │                         │
+└────────────────────┼─────────────────────────┘
+                     │
+    ┌────────────────┼────────────────┐
+    │                │                │
+    ▼                ▼                ▼
+┌────────┐   ┌────────────┐   ┌────────────┐
+│ Drizzle│   │  FastAPI    │   │ PostgreSQL │
+│  ORM   │──>│  AI Engine  │──>│   16 +     │
+│ (CRUD) │   │ (Analyze/   │   │  pgvector  │
+│        │   │  Search/    │   │            │
+└────┬───┘   │  Import)    │   └────────────┘
+     │       └─────────────┘
+     │              │
+     └──────────────┘
+         Both connect to
+         same PostgreSQL
+```
+
+**Hybrid architecture**: Next.js handles CRUD and SSR via Server Actions + Drizzle ORM. FastAPI handles AI-intensive workloads (requirement analysis, semantic search, smart import, feed aggregation) as a sidecar service.
+
+## Quick Start
+
+```bash
+# Prerequisites: Docker, Node.js 18+
+
+# 1. Clone and configure
+git clone <repo-url> && cd prism
+cp .env.example .env
+# Edit .env: set AUTH_SECRET, AI_KEY_ENCRYPTION_SECRET, INTERNAL_TOKEN
+
+# 2. Start database + API backend
+docker-compose up -d
+
+# 3. Start frontend
+cd web && npm install && npm run dev
+
+# Open http://localhost:3001
+# API docs: http://localhost:8001/docs
+```
+
+## Quality Metrics
+
+| Metric | Value |
+|--------|-------|
+| Test points | 155 (100% pass rate) |
+| Bugs tracked | 84 (all resolved) |
+| Features | 20 (F1-F20) |
+| Architecture Decision Records | 13 (MADR 3.0 format) |
+| Backend code | ~8,000 lines Python |
+| Frontend code | ~3,400 lines TypeScript |
+
+## Development Methodology
+
+**IDAKE 5-Step Loop** — applied to every feature:
+
+```
+1. Spec    → Write acceptance criteria (3-10 per feature)
+2. Build   → AI generates code based on AC
+3. Break   → Human verifies against AC, finds edge cases
+4. Fix     → AI fixes → Human re-verifies → loop until all AC pass
+5. Evolve  → Lessons learned recorded in Prism itself (dogfooding)
+```
+
+**Harness mechanisms**: session progress recovery, doom loop detection (>6 edits on same file = stop and rethink), architecture guardrails per version.
+
+## Project Documentation
+
+```
+docs/
+├── product/           # PRD, feature list & user stories
+├── adr/               # 13 Architecture Decision Records
+├── architecture/      # arc42 tech architecture doc
+├── dev-plan/          # Roadmap, parallel dev plan, agent orchestration
+├── testing/           # Test plans, bug log (84 bugs), RCA reports
+├── business-design/   # Data flow, import process, AI integration
+└── ai-prompt/         # Session-based AI prompt engineering
+```
+
+## Version History
+
+| Version | Milestone | Status |
+|---------|-----------|--------|
+| v0.1 | MVP — record, browse, visualize, multi-user | Done |
+| v0.2 | Analysis — compare, AI-powered analysis, tracking | Done |
+| v0.3 | AI Enhanced — smart import, hybrid search | Done |
+| v1.x | Team support, import/export, full test coverage | Done |
+
+## License
+
+Private project. Not open-sourced.
