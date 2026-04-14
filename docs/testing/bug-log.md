@@ -646,3 +646,340 @@ setSemanticLoading(!hasSemanticInResults)
 **方案B**（无依赖）：搜索完成后统一 `setSemanticLoading(false)`，不再尝试推断语义搜索状态。语义搜索是后端自动执行的，前端无需区分。
 
 - **受影响文件**: `web/src/app/search/page.tsx:119,139-146`
+
+## BUG-068: version_records 表缺少 change_type/snapshot_data/mode 列（migration 0001 未应用）
+
+- **日期**: 2026-04-14
+- **严重度**: High
+- **来源**: E2E测试 TP-006
+- **状态**: Open
+
+### 现象
+version_records 表实际列为 id, node_id, version_label, summary, details, created_at。缺少 change_type, is_current, snapshot_data, mode 四列。后端 ORM 模型定义了这些列，但数据库中不存在，运行时写入这些字段会报 SQL 错误。
+
+### 根因
+Drizzle migration `web/drizzle/0001_hard_misty_knight.sql:158-160` 定义了 ALTER TABLE 添加 change_type、snapshot_data、mode 列，但该 migration 未被应用到当前数据库。初始 migration `0000_tense_penance.sql:70-78` 只创建了基础 6 列（含 is_current），而 0001 补充的 3 列从未生效。
+
+SQLAlchemy 模型 `api/models/tables.py:165-168` 定义了 change_type、is_current、snapshot_data、mode，与实际 DB schema 不同步。
+
+### 修复建议
+执行 migration 0001：`psql -h 127.0.0.1 -U prism -d prism -f web/drizzle/0001_hard_misty_knight.sql`，或手动执行缺失的 ALTER TABLE 语句。
+
+### 受影响文件
+- `api/models/tables.py:160-169`（ORM 模型定义）
+- `web/drizzle/0001_hard_misty_knight.sql:158-160`（未应用的 migration）
+
+---
+
+## BUG-069: POST /api/projects/{id}/tree-overview 返回 405，无节点 CRUD 端点
+
+- **日期**: 2026-04-14
+- **严重度**: High
+- **来源**: E2E测试 TP-004
+- **状态**: Open
+
+### 现象
+POST /api/projects/{id}/tree-overview 返回 405 Method Not Allowed。项目中不存在节点创建/修改/删除的 API 端点，只有 GET tree-overview。
+
+### 根因
+`api/routers/projects.py:277` 只定义了 `@router.get("/{project_id}/tree-overview")`，没有 POST/PUT/DELETE 端点用于节点 CRUD。整个 routers 目录中无 nodes.py 路由文件，节点数据只能通过种子脚本或 AI 导入写入。
+
+### 修复建议
+新建 `api/routers/nodes.py`，实现节点 CRUD 端点：POST（创建）、PATCH（修改）、DELETE（删除），注册到 `api/main.py`。
+
+### 受影响文件
+- `api/routers/projects.py:277`（仅有 GET）
+- `api/main.py`（缺少 nodes router 注册）
+
+---
+
+## BUG-070: issues 表使用 type 列但 ORM 模型定义 category，hybrid_search.py 引用 i.category
+
+- **日期**: 2026-04-14
+- **严重度**: High
+- **来源**: E2E测试 TP-008, TP-053, TP-111
+- **状态**: Open
+
+### 现象
+1. POST /api/projects/{id}/issues 返回 404，无 issues CRUD 端点
+2. issues 表实际数据库中列名为 `type`，但 ORM 模型 `tables.py:248` 定义为 `category`
+3. `hybrid_search.py:256,264` 使用 `i.category` 进行 SQL 查询，与实际 DB 列名 `type` 不匹配，语义搜索 issue 时会报 SQL 列不存在错误
+
+### 根因
+DB migration 创建 issues 表时使用 `type` 列名，但 ORM 模型和 hybrid_search 的原始 SQL 均使用 `category`。两处列名不同步。同时，整个 API 层无 issues 的 CRUD 路由。
+
+### 修复建议
+1. 统一列名：将 DB 中 `type` 列 ALTER 为 `category`（与 ORM 保持一致），或反过来修改 ORM 和 SQL
+2. 新建 issues CRUD 路由
+3. 修复 `hybrid_search.py:256,264` 中的列名引用
+
+### 受影响文件
+- `api/models/tables.py:248`（ORM 定义 category）
+- `api/services/hybrid_search.py:256`（SQL 引用 i.category）
+- `api/services/hybrid_search.py:264`（SQL 引用 i.category）
+
+---
+
+## BUG-071: settings 端点不返回 hierarchy_labels，PATCH 也不更新
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: E2E测试 TP-029, TP-031, TP-040
+- **状态**: Open
+
+### 现象
+1. GET /api/projects/{id}/settings 返回中无 hierarchy_labels 字段（始终 null）
+2. PATCH /api/projects/{id}/settings 不支持 hierarchy_labels 更新
+3. hierarchy_labels 实际存储在 projects 表中，通过 GET /api/projects/{id} 可以读取
+
+### 根因
+`api/routers/settings.py:58-65`：`ProjectSettingsResponse` schema 不包含 `hierarchy_labels` 字段（`api/schemas/settings.py:17-24` 无此字段）。
+`api/routers/settings.py:68-93`：`ProjectSettingsUpdate` schema（`api/schemas/settings.py:27-29`）只有 `name` 和 `description`，不支持 `hierarchy_labels`。
+但 `api/routers/projects.py:105-124` 的 PATCH `/{project_id}` 端点支持 `hierarchy_labels` 更新。
+
+### 修复建议
+在 `ProjectSettingsResponse` 和 `ProjectSettingsUpdate` schema 中添加 `hierarchy_labels` 字段，settings 路由的 GET 返回 `project.hierarchy_labels`，PATCH 也写入该字段。
+
+### 受影响文件
+- `api/schemas/settings.py:17-29`（缺少 hierarchy_labels 字段）
+- `api/routers/settings.py:58-65`（GET 未返回 hierarchy_labels）
+- `api/routers/settings.py:68-93`（PATCH 未处理 hierarchy_labels）
+
+---
+
+## BUG-072: open_source_research 模板无维度配置数据
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: E2E测试 TP-038
+- **状态**: Open
+
+### 现象
+使用 open_source_research 模板创建项目后，project_dimension_configs 为 0 条（期望 9 条）。custom 模板创建后只有 3 条（期望由用户自选或有默认值）。
+
+### 根因
+`api/services/project_crud.py:88-98`：创建项目时通过 `ProjectTemplate.dimension_keys` 查找对应模板的维度 key 列表。但 `project_templates` 表中未插入 `open_source_research` 模板记录（或其 `dimension_keys` 为空数组），导致创建时跳过维度配置写入。
+
+### 修复建议
+在种子数据或 migration 中确保 `project_templates` 表包含 `open_source_research` 模板记录，且 `dimension_keys` 含正确的 9 个维度 key。
+
+### 受影响文件
+- `api/services/project_crud.py:88-98`（模板查询逻辑正确，但数据缺失）
+- 种子数据/migration（缺少 open_source_research 模板配置）
+
+---
+
+## BUG-073: PATCH dimension_configs enabled 状态不生效
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: E2E测试 TP-039
+- **状态**: Open
+
+### 现象
+PATCH 维度配置 enabled 字段返回 200，但再次 GET 时 enabled 状态未变化。
+
+### 根因
+`api/routers/settings.py:68-93`：PATCH settings 端点只处理 `name` 和 `description` 字段（第 83-86 行），不处理 `dimension_configs` 的 enabled 更新。没有独立的维度配置 PATCH 端点。
+
+### 修复建议
+新增 PATCH `/api/projects/{project_id}/dimension-configs/{config_id}` 端点，支持修改 `enabled` 和 `sort_order` 字段。
+
+### 受影响文件
+- `api/routers/settings.py:68-93`（不处理 dimension_configs）
+
+---
+
+## BUG-074: 搜索无最低相关度阈值，不匹配查询仍返回所有结果
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: E2E测试 TP-061, TP-119
+- **状态**: Open
+
+### 现象
+搜索完全不存在的关键词（如 "ZZZZNOTEXIST999"）仍返回 total=16 的结果，语义搜索无最低得分阈值过滤。
+
+### 根因
+`api/services/hybrid_search.py`：语义搜索路径使用 `1 - (embedding <=> query_vec)` 计算相似度，但未设置最低阈值过滤低相关结果。关键词搜索路径使用 ILIKE，无匹配时不返回结果，但语义搜索会返回所有已有 embedding 的记录按距离排序。RRF 合并后无最终阈值过滤。
+
+### 修复建议
+在语义搜索 SQL 中添加 `WHERE similarity > 0.3`（或其他合理阈值），或在 RRF 合并后过滤 score 低于阈值的结果。
+
+### 受影响文件
+- `api/services/hybrid_search.py`（语义搜索 SQL 缺少阈值过滤）
+
+---
+
+## BUG-075: /search/unified 端点无认证保护
+
+- **日期**: 2026-04-14
+- **严重度**: Critical
+- **来源**: E2E测试 TP-094
+- **状态**: Open
+
+### 现象
+GET /search/unified?q=xxx&user_id=xxx 无需 Authorization header 即可访问，返回 200 和搜索结果。
+
+### 根因
+`api/routers/search.py:126-151`：`search_unified` 函数未使用 `Depends(require_user)` 依赖。它通过 query 参数 `user_id` 做权限过滤，但不验证 Token，任何人可以伪造 user_id 访问。搜索路由注册在 `/search` 前缀下（`api/main.py:70`），与 `/api` 前缀的路由分离，认证保护被遗漏。
+
+### 修复建议
+给 `search_unified` 添加 `user: User = Depends(require_user)` 依赖，使用 `str(user.id)` 替代 query 参数 `user_id`。
+
+### 受影响文件
+- `api/routers/search.py:127`（缺少 Depends(require_user)）
+- `api/main.py:70`（/search 前缀无全局认证中间件）
+
+---
+
+## BUG-076: Viewer 角色可以创建项目（权限漏洞）
+
+- **日期**: 2026-04-14
+- **严重度**: Critical
+- **来源**: E2E测试 TP-120
+- **状态**: Open
+
+### 现象
+以 viewer 角色用户调用 POST /api/projects/ 返回 201，成功创建项目。期望返回 403。
+
+### 根因
+`api/routers/projects.py:57-67`：`create_new_project` 仅使用 `Depends(require_user)` 验证登录状态，不检查用户角色。任何已登录用户（包括 viewer）都可以创建项目。PRD 要求只有 admin 或 editor 可以创建。
+
+### 修复建议
+在 `create_new_project` 中添加角色检查：`if user.role not in ("platform_admin",) and ...`，或新增平台级权限控制。根据业务需求确认哪些角色可以创建项目。
+
+### 受影响文件
+- `api/routers/projects.py:57-67`（缺少角色检查）
+
+---
+
+## BUG-077: 非 UUID 格式 project_id 导致 500 而非 422
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: E2E测试 TP-128
+- **状态**: Open
+
+### 现象
+GET /api/projects/not-a-uuid 返回 500 Internal Server Error，期望返回 422（参数格式错误）。
+
+### 根因
+`api/services/project_crud.py:151-154`：`get_project` 中 `uuid.UUID(project_id)` 对非 UUID 字符串抛出 `ValueError`，但 `api/routers/projects.py:79-102` 的 `get_project_detail` 中 `check_permission` 先调用 `uuid.UUID(user_id)`（成功），再调用 `uuid.UUID(project_id)`（失败），未被 try/except 捕获，FastAPI 返回 500。
+
+### 修复建议
+在路由层对 `project_id` 参数使用 UUID 类型注解（`project_id: uuid.UUID`），让 FastAPI 自动返回 422。或在 service 层捕获 `ValueError` 并抛出 `HTTPException(422)`。
+
+### 受影响文件
+- `api/routers/projects.py:79`（project_id 为 str 类型，无格式校验）
+- `api/services/project_crud.py:151`（uuid.UUID() 可能抛出 ValueError）
+
+---
+
+## BUG-078: 软删除项目后 tree-overview 仍返回 200
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: E2E测试 TP-129
+- **状态**: Open
+
+### 现象
+项目被软删除后，GET /api/projects/{id}/tree-overview 仍返回 200 和空树数据，期望返回 404。
+
+### 根因
+`api/services/project_stats.py:72`：`get_project_tree_overview` 中 `db.query(Project).filter(Project.id == project_id)` 没有过滤 `deleted_at IS NULL`，导致软删除的项目仍可被查询到。同文件第 19 行的 `get_project_stats` 也有同样问题。
+
+### 修复建议
+在 `get_project_tree_overview` 和 `get_project_stats` 的查询中添加 `.filter(Project.deleted_at.is_(None))`。
+
+### 受影响文件
+- `api/services/project_stats.py:72`（tree_overview 未过滤软删除）
+- `api/services/project_stats.py:19`（stats 未过滤软删除）
+
+---
+
+## BUG-079: Markdown 导入对简单内容返回 400 "未解析到任何功能项"
+
+- **日期**: 2026-04-14
+- **严重度**: Low
+- **来源**: E2E测试 TP-090
+- **状态**: Open
+
+### 现象
+POST /api/import/markdown 上传简单 Markdown 文件返回 400 "未解析到任何功能项"。
+
+### 根因
+`api/services/exporter.py:198-228`：`parse_markdown_content` 要求严格的导出格式（`# Feature Name` → `## Dimension Name` → content），普通 Markdown 文件不含 h1 标题时 `features` 列表为空。`api/routers/import_.py:263` 检查空列表后返回 400。
+
+### 修复建议
+增强 `parse_markdown_content` 的容错性：当没有 h1 标题时，将整个文件视为一个功能项；或在 API 文档中说明要求的 Markdown 格式。
+
+### 受影响文件
+- `api/services/exporter.py:198-228`（解析逻辑过严格）
+- `api/routers/import_.py:263`（空列表返回 400）
+
+---
+
+## BUG-080: 导入端点未认证时返回 422 而非 401
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: E2E测试 TP-109
+- **状态**: Open
+
+### 现象
+POST /api/import/ai-analyze 无 Authorization header 时返回 422（body validation error），而非 401。
+
+### 根因
+`api/routers/import_.py:63-95`：`ai_analyze` 端点未使用 `Depends(require_user)` 依赖。请求体中包含 `user_id` 字段（`AIAnalyzeRequest`），导致 Pydantic 在认证检查前先做 body validation。所有导入端点（ai-analyze、ai-confirm、undo）均无认证保护。
+
+### 修复建议
+给所有导入端点添加 `Depends(require_user)` 依赖，使用 `str(user.id)` 替代请求体中的 `user_id` 字段。
+
+### 受影响文件
+- `api/routers/import_.py:63`（ai_analyze 无认证）
+- `api/routers/import_.py:156`（ai_confirm 无认证）
+- `api/routers/import_.py:199`（undo 无认证）
+
+---
+
+## BUG-081: auth.py 无数据库异常 503 处理
+
+- **日期**: 2026-04-14
+- **严重度**: Low
+- **来源**: E2E测试 TP-098
+- **状态**: Open
+
+### 现象
+当数据库不可用时，auth 相关端点抛出未捕获异常（500），而非返回 503 "数据库不可用"。
+
+### 根因
+`api/routers/auth.py:62-83`：`login` 等端点直接调用 `db.query()`，无 try/except 包裹数据库操作。数据库连接失败时 SQLAlchemy 抛出 `OperationalError`，FastAPI 返回通用 500。
+
+### 修复建议
+在关键认证端点（login、refresh）添加数据库异常捕获，返回 HTTPException(503, "数据库暂时不可用")。
+
+### 受影响文件
+- `api/routers/auth.py:62-83`（login 无 DB 异常处理）
+- `api/routers/auth.py:86-94`（refresh 无 DB 异常处理）
+
+---
+
+## BUG-082: 前端对比矩阵仍使用 highlight 字段而非 score
+
+- **日期**: 2026-04-14
+- **严重度**: Low
+- **来源**: E2E测试 TP-115
+- **状态**: Open
+
+### 现象
+前端对比数据原型仍使用 `highlight: "green"/"red"/null` 字段，BUG-048 要求改用 `score` 数值字段。
+
+### 根因
+`web/src/lib/comparison-data.ts:10-36`：硬编码的 mock 数据使用 `highlight` 字段标注竞品优劣势。BUG-048 修复建议改用 `score` 数值字段，但前端原型数据未同步更新。
+
+### 修复建议
+将 `comparison-data.ts` 中的 `highlight` 字段替换为 `score` 数值（如 green→1, red→-1, null→0），或等后端对比 API 完善后统一替换。
+
+### 受影响文件
+- `web/src/lib/comparison-data.ts:10-36`（使用 highlight 而非 score）
