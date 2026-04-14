@@ -72,7 +72,9 @@ UI 原型参考: design/ui-prototype/（复用交互模式和布局）
 
 规则:
 - 不直接修改 api/ 或 web/src/ 的代码
-- 发现 bug 记录在 docs/test-checklist-v0.1-phase1.md，标注修复建议
+- 发现 bug 记录在 docs/testing/test-checklist-v0.1-phase1.md，标注修复建议
+- 发现的 bug 必须同步追加到 docs/testing/bug-log.md，沿用已有编号（BUG-NNN 递增），包含：严重度/问题描述/根因/修复建议/受影响文件
+- 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body 的字段名、类型、必填项
 
 ## Agent 4 — 预算监控（后台运行）
 
@@ -163,8 +165,10 @@ UI 原型参考:
 
 同 Phase 1 模式:
 1. 读代码 → tsc 检查 → curl 测试 → 安全检查
-2. 写 docs/test-checklist-v0.1-phase2.md
+2. 写 docs/testing/test-checklist-v0.1-phase2.md
 3. 逐条验证 F3/F4/F5 的每个 AC
+4. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+5. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -220,7 +224,9 @@ UI 原型: design/ui-prototype/app/projects/[id]/import-ai/page.tsx
 1. 准备测试 zip 文件（从 /root/cy/ai-quality-engineering/01-工作/ 打包几个 md 文件）
 2. 用测试 zip 走完导入流程
 3. 验证 F11 每个 AC
-4. 写 docs/test-checklist-v0.1-phase3.md
+4. 写 docs/testing/test-checklist-v0.1-phase3.md
+5. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+6. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -341,11 +347,12 @@ UI 原型参考:
    - AC3: 结构化模板字段完整
    - AC4: 编辑和删除
    - AC5: 竞品全局实体管理（competitors 表）
-6. 写 docs/test-checklist-v0.2-phase4.md
+6. 写 docs/testing/test-checklist-v0.2-phase4.md
 
 规则:
 - 不直接修改代码
-- bug 记录在测试清单中
+- bug 记录在测试清单中，并同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+- 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body 的字段名、类型、必填项
 
 ## Agent 4 — 预算监控（后台运行）
 
@@ -439,7 +446,9 @@ UI 原型参考: design/ui-prototype/app/search/page.tsx
    - AC6: 默认跨全部项目搜索，可按项目/维度/问题分类筛选
    - AC7: 结果标注来源项目 Badge
 2. 测试中文搜索、长文本匹配、跨项目搜索
-3. 写 docs/test-checklist-v0.2-phase5.md
+3. 写 docs/testing/test-checklist-v0.2-phase5.md
+4. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+5. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -551,7 +560,9 @@ UI 原型参考:
    - AC6: 功能项级视图（点击模块展开）
    - AC7: 节点数 ≤200 上限控制
 3. 性能测试: 验证节点数 >20 时关系图渲染性能
-4. 写 docs/test-checklist-v0.2-phase6.md
+4. 写 docs/testing/test-checklist-v0.2-phase6.md
+5. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+6. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -682,7 +693,9 @@ UI 原型参考:
    - AC5: 可导出
    - AC6: 回填到 F6 竞品参考
 3. 测试 AI Provider 切换
-4. 写 docs/test-checklist-v0.3-phase7.md
+4. 写 docs/testing/test-checklist-v0.3-phase7.md
+5. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+6. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -792,7 +805,9 @@ UI 原型参考:
    - AC3: F13 分析后展示结果流向提示
    - AC4: 活动日志页展示历史操作列表
 3. 测试 F16 前置条件: 版本记录 <3 时按钮不显示
-4. 写 docs/test-checklist-v0.3-phase8.md
+4. 写 docs/testing/test-checklist-v0.3-phase8.md
+5. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+6. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -898,7 +913,9 @@ UI 原型参考: design/ui-prototype/app/projects/[id]/import-ai/page.tsx
    - AC9: 支持 Markdown/CSV/纯文本
    - AC10: 一键撤销本次导入
 3. 验证与 F15 的联动: 确认导入后切换到流转进度面板
-4. 写 docs/test-checklist-v0.4-phase9.md
+4. 写 docs/testing/test-checklist-v0.4-phase9.md
+5. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+6. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -987,7 +1004,9 @@ ADR:
 2. 降级测试: 停止 pgvector → 验证搜索仍可用
 3. 语义匹配质量测试: 同义词搜索、跨语言匹配
 4. 性能测试: 搜索响应 ≤3s
-5. 写 docs/test-checklist-v0.4-phase10.md
+5. 写 docs/testing/test-checklist-v0.4-phase10.md
+6. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+7. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -1082,7 +1101,9 @@ UI 原型参考:
    - AC5: 确认关联后在功能项档案页可见
 2. 测试订阅源管理 CRUD
 3. 测试 AI 推荐关联的准确性
-4. 写 docs/test-checklist-v0.4-phase11.md
+4. 写 docs/testing/test-checklist-v0.4-phase11.md
+5. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+6. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
@@ -1192,7 +1213,9 @@ ADR:
    - AC3: 团队成员权限（复用管理员/编辑者/查看者）
 3. 迁移测试: 迁移后项目所有数据完整
 4. 格式闭环测试: 导出 → 重新导入 → 内容一致
-5. 写 docs/test-checklist-v1.x-phase12.md
+5. 写 docs/testing/test-checklist-v1.x-phase12.md
+6. 发现的 bug 必须同步追加到 docs/testing/bug-log.md（BUG-NNN 递增，含严重度/根因/修复建议/受影响文件）
+7. 重点检查前后端 API 契约对齐：逐字段比对 Pydantic schema 与前端 fetch body
 
 ## Agent 4 — 预算监控
 
