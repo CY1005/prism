@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, Plus, LogOut, Shield } from "lucide-react"
+import { Bell, Plus, LogOut, Shield, Users } from "lucide-react"
 import { GlobalSearchBar } from "@/components/global-search-bar"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { listProjects, type ProjectSummary } from "@/services/projects"
 import { logout, getSessionUser } from "@/actions/auth"
+import { getTeams, getTeamProjects } from "@/actions/teams"
 
 const typeColorMap: Record<string, string> = {
   blue: "border-blue-200 text-blue-700 bg-blue-50",
@@ -34,10 +35,20 @@ const templateColor: Record<string, string> = {
   custom: "orange",
 }
 
+type ProjectTab = "personal" | "team"
+
+type TeamGroup = {
+  teamId: string
+  teamName: string
+  projects: { id: string; name: string; description: string | null; templateType: string; createdAt: Date }[]
+}
+
 export default function ProjectsPage() {
   const [apiProjects, setApiProjects] = useState<ProjectSummary[] | null>(null)
   const [userName, setUserName] = useState("")
   const [userInitials, setUserInitials] = useState("")
+  const [activeTab, setActiveTab] = useState<ProjectTab>("personal")
+  const [teamGroups, setTeamGroups] = useState<TeamGroup[]>([])
 
   useEffect(() => {
     listProjects().then((r) => {
@@ -48,6 +59,20 @@ export default function ProjectsPage() {
         setUserName(user.name)
         setUserInitials(user.name.charAt(0))
       }
+    })
+    // Load team projects
+    getTeams().then(async (teams) => {
+      const groups: TeamGroup[] = await Promise.all(
+        teams.map(async (t) => {
+          const projs = await getTeamProjects(t.id)
+          return {
+            teamId: t.id,
+            teamName: t.name,
+            projects: projs as TeamGroup["projects"],
+          }
+        }),
+      )
+      setTeamGroups(groups.filter((g) => g.projects.length > 0))
     })
   }, [])
 
@@ -100,51 +125,139 @@ export default function ProjectsPage() {
       </header>
 
       <div className="flex items-center justify-between px-6 py-4">
-        <h1 className="text-xl font-semibold text-foreground">{projectsStrings.myProjects}</h1>
-        <Link href="/projects/new">
-          <Button variant="default">
-            <Plus className="mr-2 h-4 w-4" />{projectsStrings.newProject}
-          </Button>
-        </Link>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-1">
+            <button
+              onClick={() => setActiveTab("personal")}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === "personal"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              我的项目
+            </button>
+            <button
+              onClick={() => setActiveTab("team")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === "team"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Users className="h-3.5 w-3.5" />
+              团队项目
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/teams">
+            <Button variant="outline">
+              <Users className="mr-2 h-4 w-4" />团队空间
+            </Button>
+          </Link>
+          <Link href="/projects/new">
+            <Button variant="default">
+              <Plus className="mr-2 h-4 w-4" />{projectsStrings.newProject}
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 px-6">
-        {displayProjects.map((project) => (
-          <Link key={project.id} href={`/projects/${project.id}`}>
-            <Card className="border-border/60 p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all cursor-pointer">
-              <div className="flex items-start justify-between">
-                <div>
-                  <Badge variant="outline" className={cn("text-xs mb-2", typeColorMap[project.typeColor])}>
-                    {project.type}
-                  </Badge>
-                  <h3 className="font-semibold text-foreground">{project.title}</h3>
-                </div>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
-              <div className="mt-3 flex gap-4">
-                {project.stats.map((stat, index) => (
-                  <div key={index}>
-                    <span className={cn("text-2xl font-bold", index === project.stats.length - 1 ? "text-primary" : "text-foreground")}>
-                      {stat.value}
-                    </span>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+      {activeTab === "personal" && (
+        <div className="grid grid-cols-2 gap-4 px-6">
+          {displayProjects.map((project) => (
+            <Link key={project.id} href={`/projects/${project.id}`}>
+              <Card className="border-border/60 p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all cursor-pointer">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <Badge variant="outline" className={cn("text-xs mb-2", typeColorMap[project.typeColor])}>
+                      {project.type}
+                    </Badge>
+                    <h3 className="font-semibold text-foreground">{project.title}</h3>
                   </div>
-                ))}
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{projectsStrings.lastUpdated}{project.lastUpdated}</span>
-                <div className="flex">
-                  {project.members.map((member, index) => (
-                    <Avatar key={index} className={`h-6 w-6 border-2 border-card ${index > 0 ? "-ml-2" : ""}`}>
-                      <AvatarFallback className="bg-muted text-xs">{member}</AvatarFallback>
-                    </Avatar>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
+                <div className="mt-3 flex gap-4">
+                  {project.stats.map((stat, index) => (
+                    <div key={index}>
+                      <span className={cn("text-2xl font-bold", index === project.stats.length - 1 ? "text-primary" : "text-foreground")}>
+                        {stat.value}
+                      </span>
+                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{projectsStrings.lastUpdated}{project.lastUpdated}</span>
+                  <div className="flex">
+                    {project.members.map((member, index) => (
+                      <Avatar key={index} className={`h-6 w-6 border-2 border-card ${index > 0 ? "-ml-2" : ""}`}>
+                        <AvatarFallback className="bg-muted text-xs">{member}</AvatarFallback>
+                      </Avatar>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {activeTab === "team" && (
+        <div className="px-6 space-y-6">
+          {teamGroups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">暂无团队项目</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                在项目设置中将项目迁移到团队，或前往团队空间创建团队
+              </p>
+              <Link href="/teams">
+                <Button variant="outline">
+                  <Users className="mr-2 h-4 w-4" />前往团队空间
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            teamGroups.map((group) => (
+              <div key={group.teamId}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="text-base font-semibold">{group.teamName}</h2>
+                  <Badge variant="secondary" className="text-xs">{group.projects.length} 个项目</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {group.projects.map((project) => (
+                    <Link key={project.id} href={`/projects/${project.id}`}>
+                      <Card className="border-border/60 p-5 shadow-sm hover:border-primary/40 hover:shadow-md transition-all cursor-pointer">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <Badge variant="outline" className={cn("text-xs mb-2", typeColorMap[templateColor[project.templateType] || "blue"])}>
+                              {templateLabel[project.templateType] || project.templateType}
+                            </Badge>
+                            <h3 className="font-semibold text-foreground">{project.name}</h3>
+                          </div>
+                        </div>
+                        {project.description && (
+                          <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
+                        )}
+                        <div className="mt-4">
+                          <span className="text-xs text-muted-foreground">
+                            创建于 {new Date(project.createdAt).toLocaleDateString("zh-CN")}
+                          </span>
+                        </div>
+                      </Card>
+                    </Link>
                   ))}
                 </div>
               </div>
-            </Card>
-          </Link>
-        ))}
-      </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }

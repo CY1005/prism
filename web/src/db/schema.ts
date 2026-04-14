@@ -45,6 +45,7 @@ export const projects = pgTable("projects", {
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
+  teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
   deletedAt: timestamp("deleted_at"), // F2 AC15-18: soft delete
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -369,3 +370,33 @@ export const feedNodeLinks = pgTable("feed_node_links", {
     .references(() => nodes.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ─── Teams (F20 团队空间) ─────────────────────────────
+
+export const teams = pgTable("teams", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  description: text("description"),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─── Team Members (F20 团队成员) ──────────────────────
+
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("member"), // 'admin' | 'member'
+    joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.teamId, t.userId)],
+);

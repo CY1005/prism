@@ -1,4 +1,4 @@
-"""Import router: F11 zip upload + F17 AI智能导入."""
+"""Import router: F11 zip upload + F17 AI智能导入 + F19 Markdown re-import."""
 
 import logging
 
@@ -10,6 +10,7 @@ from typing import Any
 from api.db import get_db
 from api.services.import_handler import extract_and_parse_zip
 from api.services.ai_import import analyze_zip_files, confirm_ai_import, undo_ai_import
+from api.services.exporter import parse_markdown_content
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -222,3 +223,63 @@ def undo_import(
         raise HTTPException(status_code=500, detail="撤销失败，请重试")
 
     return result
+
+
+# ─── F19: Markdown re-import ─────────────────────────────────────────────────
+
+@router.post("/markdown")
+async def import_markdown(file: UploadFile = File(...)):
+    """Accept a single .md file upload, parse it using the export format.
+
+    Format: h1 = feature name, h2 = dimension name, body = content.
+    Returns parsed structure compatible with the /upload endpoint format.
+    """
+    if not file.filename or not file.filename.lower().endswith(".md"):
+        raise HTTPException(status_code=400, detail="仅支持 .md 文件")
+
+    contents = await file.read()
+
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="文件为空")
+
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 50MB")
+
+    try:
+        md_text = contents.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            md_text = contents.decode("gbk")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="无法解码文件，请使用 UTF-8 编码")
+
+    try:
+        features = parse_markdown_content(md_text)
+    except Exception:
+        logger.exception("Failed to parse markdown import")
+        raise HTTPException(status_code=400, detail="Markdown 解析失败")
+
+    if not features:
+        raise HTTPException(status_code=400, detail="未解析到任何功能项")
+
+    # Convert to the same format as /upload for frontend compatibility
+    files = []
+    for feature in features:
+        files.append({
+            "path": f"{feature['name']}.md",
+            "name": f"{feature['name']}.md",
+            "format": "markdown",
+            "content": md_text,
+            "size": len(contents),
+            "parsed_feature": feature,
+        })
+
+    return {
+        "files": files,
+        "features": features,
+        "tree": {
+            "name": file.filename,
+            "type": "file",
+            "format": "markdown",
+        },
+    }

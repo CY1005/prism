@@ -58,6 +58,7 @@ class Project(Base):
     ai_provider = Column(Text, default="local")
     ai_api_key_enc = Column(Text)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"))
     deleted_at = Column(DateTime)  # F2 AC15-18: soft delete
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
@@ -342,3 +343,29 @@ class FeedNodeLink(Base):
     feed_item_id = Column(UUID(as_uuid=True), ForeignKey("feed_items.id", ondelete="CASCADE"), nullable=False)
     node_id = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Teams (F20 团队空间) ────────────────────────────
+
+class Team(Base):
+    __tablename__ = "teams"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False)
+    description = Column(Text)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Team Members (F20 团队成员) ─────────────────────
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(Text, nullable=False, default="member")
+    joined_at = Column(DateTime, server_default=func.now())

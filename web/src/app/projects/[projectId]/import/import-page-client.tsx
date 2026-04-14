@@ -1,15 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
-import { ChevronLeft, Sparkles, List } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronLeft, Sparkles, List, FileText, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { ImportWizard } from "./import-wizard";
 import { AIImportWizard } from "@/components/ai-import-wizard";
+import { confirmImport } from "@/actions/import";
 
-type ImportMode = "manual" | "ai";
+type ImportMode = "manual" | "ai" | "markdown";
 
 interface ImportPageClientProps {
   projectId: string;
@@ -68,6 +80,18 @@ export function ImportPageClient({
             <Sparkles className="h-3.5 w-3.5" />
             AI 智能导入
           </button>
+          <button
+            onClick={() => setMode("markdown")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              mode === "markdown"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Markdown 导入
+          </button>
         </div>
 
         <Link href={`/projects/${projectId}`}>
@@ -86,15 +110,197 @@ export function ImportPageClient({
             folders={folders}
             dimensions={dimensions}
           />
-        ) : (
+        ) : mode === "ai" ? (
           <AIImportWizard
             projectId={projectId}
             projectName={projectName}
             folders={folders}
             dimensions={dimensions}
           />
+        ) : (
+          <MarkdownImport
+            projectId={projectId}
+            folders={folders}
+            dimensions={dimensions}
+          />
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Markdown Single-file Import ────────────────────
+
+function MarkdownImport({
+  projectId,
+  folders,
+  dimensions,
+}: {
+  projectId: string;
+  folders: { id: string; name: string; path: string; depth: number }[];
+  dimensions: { id: number; key: string; name: string }[];
+}) {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileContent, setFileContent] = useState("");
+  const [targetFolderId, setTargetFolderId] = useState("");
+  const [nodeName, setNodeName] = useState("");
+  const [dimensionTypeId, setDimensionTypeId] = useState<string>("");
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.name.endsWith(".md") && !f.name.endsWith(".markdown")) {
+      setError("请选择 Markdown 文件（.md）");
+      return;
+    }
+    setError("");
+    setFile(f);
+    setNodeName(f.name.replace(/\.(md|markdown)$/, ""));
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setFileContent(ev.target?.result as string || "");
+    };
+    reader.readAsText(f);
+  };
+
+  const handleImport = async () => {
+    if (!file || !targetFolderId || !nodeName.trim()) return;
+    setImporting(true);
+    setError("");
+    try {
+      const result = await confirmImport(projectId, [
+        {
+          fileName: file.name,
+          content: fileContent,
+          targetNodeId: targetFolderId,
+          nodeName: nodeName.trim(),
+          dimensionTypeId: dimensionTypeId && dimensionTypeId !== "none" ? parseInt(dimensionTypeId) : undefined,
+        },
+      ]);
+      if (result.success) {
+        router.push(`/projects/${projectId}`);
+      } else {
+        setError(result.error);
+      }
+    } catch {
+      setError("导入失败，请重试");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-lg py-8 px-6 space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold mb-1">导入 Markdown 文件</h2>
+        <p className="text-sm text-muted-foreground">
+          选择一个 .md 文件，将其内容导入为一个功能项
+        </p>
+      </div>
+
+      {/* File selection */}
+      <Card className="p-4">
+        <div className="space-y-3">
+          <Label>选择文件</Label>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              选择 .md 文件
+            </Button>
+            {file && (
+              <span className="text-sm text-muted-foreground">{file.name}</span>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md,.markdown"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {file && (
+        <>
+          {/* Node name */}
+          <div className="space-y-2">
+            <Label>功能项名称</Label>
+            <Input
+              value={nodeName}
+              onChange={(e) => setNodeName(e.target.value)}
+              placeholder="输入功能项名称"
+            />
+          </div>
+
+          {/* Target folder */}
+          <div className="space-y-2">
+            <Label>目标模块</Label>
+            <Select value={targetFolderId} onValueChange={(v) => v && setTargetFolderId(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="选择目标模块..." />
+              </SelectTrigger>
+              <SelectContent>
+                {folders.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {"  ".repeat(f.depth)}{f.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Dimension type */}
+          <div className="space-y-2">
+            <Label>映射到维度（可选）</Label>
+            <Select value={dimensionTypeId} onValueChange={(v) => setDimensionTypeId(v ?? "")}>
+              <SelectTrigger>
+                <SelectValue placeholder="不映射维度" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">不映射维度</SelectItem>
+                {dimensions.map((d) => (
+                  <SelectItem key={d.id} value={String(d.id)}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Preview */}
+          {fileContent && (
+            <div className="space-y-2">
+              <Label>内容预览</Label>
+              <div className="rounded-md border bg-muted/30 p-3 max-h-40 overflow-auto">
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  {fileContent.slice(0, 500)}{fileContent.length > 500 ? "..." : ""}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+
+          <Button
+            className="w-full"
+            onClick={handleImport}
+            disabled={!targetFolderId || !nodeName.trim() || importing}
+          >
+            {importing ? "导入中..." : "确认导入"}
+          </Button>
+        </>
+      )}
     </div>
   );
 }

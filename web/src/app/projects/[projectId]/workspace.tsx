@@ -20,6 +20,7 @@ import {
   Sparkles,
   BookOpen,
   Loader2,
+  Download,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -74,6 +75,7 @@ import {
 } from "@/actions/competitor-references";
 import { createRelation } from "@/actions/relations";
 import { getFeedItemsByNode } from "@/actions/feed";
+import { exportNodes, exportProject } from "@/actions/export";
 import { FeedList, type FeedItemData } from "@/components/feed-card";
 import {
   CompetitorReferenceList,
@@ -321,6 +323,9 @@ export function ProjectWorkspace({
   // Panorama prompt after first dimension record saved
   const [showPanoramaPrompt, setShowPanoramaPrompt] = useState(false);
 
+  // F19: Export states
+  const [exporting, setExporting] = useState(false);
+
   // F16: Snapshot states
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotData, setSnapshotData] = useState<SnapshotData | null>(null);
@@ -406,6 +411,51 @@ export function ProjectWorkspace({
     const data = await getNodeWithDimensions(nodeData.node.id);
     setNodeData(data);
     refreshPage();
+  };
+
+  // F19: Export node as Markdown
+  const handleExportNode = async () => {
+    if (!nodeData) return;
+    setExporting(true);
+    try {
+      const result = await exportNodes(project.id, [nodeData.node.id]);
+      if (result.success) {
+        const blob = new Blob([result.data.content], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.data.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // F19: Export module as ZIP
+  const handleExportModule = async () => {
+    if (!selectedId) return;
+    setExporting(true);
+    try {
+      const result = await exportProject(project.id, selectedId);
+      if (result.success) {
+        const binary = atob(result.data.content);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "application/zip" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.data.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleSelectNode = (id: string, type: "folder" | "file") => {
@@ -784,6 +834,16 @@ export function ProjectWorkspace({
                 <GitBranch className="h-3.5 w-3.5" />
                 添加关联
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={handleExportNode}
+                disabled={exporting}
+              >
+                <Download className="h-3.5 w-3.5" />
+                导出 Markdown
+              </Button>
               {nodeData && nodeData.versions.length >= 3 && (
                 <Button
                   variant="outline"
@@ -973,9 +1033,21 @@ export function ProjectWorkspace({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold">{breadcrumbPath[breadcrumbPath.length - 1]?.name}</h2>
-                  <Button variant="outline" size="sm" onClick={() => handleAddChild(selectedId, "file")}>
-                    <Plus className="h-4 w-4 mr-1" /> 添加功能项
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={handleExportModule}
+                      disabled={exporting}
+                    >
+                      <Download className="h-4 w-4" />
+                      导出模块
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleAddChild(selectedId, "file")}>
+                      <Plus className="h-4 w-4 mr-1" /> 添加功能项
+                    </Button>
+                  </div>
                 </div>
                 {folderChildren.length === 0 ? (
                   <Card className="border-dashed border-2 p-8 text-center">

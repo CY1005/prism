@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { use } from "react"
-import { Bell, UserPlus, LogOut, GripVertical, Folder, File } from "lucide-react"
+import { Bell, UserPlus, LogOut, GripVertical, Folder, File, Download, ArrowRightLeft } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -36,6 +36,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ChevronRight } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import {
   getProject,
@@ -69,8 +76,10 @@ import {
   type Competitor,
 } from "@/components/competitor-reference-card"
 import { Rss, Eye, EyeOff, Trash2, Plus } from "lucide-react"
+import { exportProject } from "@/actions/export"
+import { getTeams, migrateProjectToTeam } from "@/actions/teams"
 
-type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai" | "competitors" | "feed-sources"
+type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai" | "competitors" | "feed-sources" | "export" | "team"
 
 type ProjectData = {
   id: string
@@ -124,6 +133,13 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
   const [newFeedName, setNewFeedName] = useState("")
   const [newFeedUrl, setNewFeedUrl] = useState("")
   const [newFeedType, setNewFeedType] = useState("rss")
+  // F19: Export
+  const [exporting, setExporting] = useState(false)
+  // F20: Teams
+  const [teamsList, setTeamsList] = useState<{ id: string; name: string; description: string | null }[]>([])
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("")
+  const [migrating, setMigrating] = useState(false)
+  const [migrateConfirmDialog, setMigrateConfirmDialog] = useState(false)
 
   useEffect(() => {
     getProject(projectId).then((p) => {
@@ -144,6 +160,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     loadDimensions()
     loadCompetitors()
     loadFeedSourcesList()
+    getTeams().then((t) => setTeamsList(t as typeof teamsList))
     getSessionUser().then((user) => {
       if (user) {
         setUserName(user.name)
@@ -285,6 +302,41 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     await logout()
   }
 
+  // F19: Export project as ZIP
+  const handleExportProject = async () => {
+    setExporting(true)
+    try {
+      const result = await exportProject(projectId)
+      if (result.success) {
+        const binary = atob(result.data.content)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i)
+        }
+        const blob = new Blob([bytes], { type: "application/zip" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = result.data.filename
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // F20: Migrate project to team
+  const handleMigrateToTeam = async () => {
+    setMigrating(true)
+    const result = await migrateProjectToTeam(projectId, selectedTeamId || null)
+    if (result.success) {
+      setMigrateConfirmDialog(false)
+      setSelectedTeamId("")
+    }
+    setMigrating(false)
+  }
+
   const enabledDims = dimensionConfigs.filter((c) => c.enabled)
   const disabledDims = dimensionConfigs.filter((c) => !c.enabled)
 
@@ -332,7 +384,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
 
       <div className="flex">
         <div className="w-[200px] border-r border-border p-4 space-y-1">
-          {(["basic", "dimensions", "hierarchy", "members", "ai", "competitors", "feed-sources"] as TabType[]).map((tab) => {
+          {(["basic", "dimensions", "hierarchy", "members", "ai", "competitors", "feed-sources", "export", "team"] as TabType[]).map((tab) => {
             const labels: Record<TabType, string> = {
               basic: "基本信息",
               dimensions: "维度管理",
@@ -341,6 +393,8 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               ai: "AI配置",
               competitors: "竞品管理",
               "feed-sources": "订阅源",
+              export: "导出项目",
+              team: "迁移到团队",
             }
             return (
               <button
@@ -744,6 +798,99 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* F19: Export Project Tab */}
+          {activeTab === "export" && (
+            <div>
+              <h2 className="text-lg font-semibold mb-2">导出项目</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                将整个项目导出为 ZIP 文件，包含所有模块和功能项的 Markdown 文件
+              </p>
+              <Card className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Download className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">导出完整项目</p>
+                      <p className="text-xs text-muted-foreground">包含所有产品线、模块和功能项</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="default"
+                    onClick={handleExportProject}
+                    disabled={exporting}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    {exporting ? "导出中..." : "导出 ZIP"}
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* F20: Migrate to Team Tab */}
+          {activeTab === "team" && (
+            <div>
+              <h2 className="text-lg font-semibold mb-2">迁移到团队</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                将项目迁移到团队空间，团队成员将可以访问该项目
+              </p>
+              <div className="space-y-4 max-w-md">
+                <div className="space-y-2">
+                  <Label>选择目标团队</Label>
+                  {teamsList.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">
+                      你还没有团队，请先<a href="/teams" className="text-primary hover:underline">创建团队</a>
+                    </p>
+                  ) : (
+                    <Select value={selectedTeamId} onValueChange={(v) => v && setSelectedTeamId(v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择团队..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teamsList.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                            {t.description ? ` - ${t.description}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button
+                  variant="default"
+                  onClick={() => setMigrateConfirmDialog(true)}
+                  disabled={!selectedTeamId || !canAdmin}
+                  title={!canAdmin ? "需要管理员权限" : undefined}
+                >
+                  <ArrowRightLeft className="h-4 w-4 mr-2" />
+                  迁移项目
+                </Button>
+              </div>
+
+              {/* Migrate Confirm Dialog */}
+              {migrateConfirmDialog && (
+                <Dialog open={migrateConfirmDialog} onOpenChange={setMigrateConfirmDialog}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>确认迁移项目</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground py-4">
+                      迁移后，项目将归属于所选团队。团队内所有成员将可以访问该项目。
+                      你仍然可以在项目设置中将项目迁回个人空间。
+                    </p>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setMigrateConfirmDialog(false)}>取消</Button>
+                      <Button onClick={handleMigrateToTeam} disabled={migrating}>
+                        {migrating ? "迁移中..." : "确认迁移"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           )}
         </div>
