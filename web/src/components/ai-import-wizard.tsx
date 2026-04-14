@@ -642,11 +642,11 @@ export function AIImportWizard({
       )}
 
       {/* Step Content */}
-      <div className="flex-1 overflow-hidden">
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
 
         {/* ─── Step 0: Upload ─────────────────────── */}
         {step === 0 && (
-          <div className="flex items-center justify-center h-full p-6">
+          <div className="flex items-center justify-center p-6" style={{ position: "absolute", inset: 0 }}>
             <Card
               className={cn(
                 "w-full max-w-lg border-2 border-dashed p-12 text-center transition-colors cursor-pointer",
@@ -683,10 +683,10 @@ export function AIImportWizard({
               ) : (
                 <>
                   <p className="text-lg font-medium">
-                    拖拽 ZIP 文件到这里，或点击选择
+                    拖拽 ZIP 压缩包到这里，或点击选择
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    支持 Markdown、CSV、纯文本格式，最大 50MB
+                    上传 .zip 压缩包（内含 .md / .csv / .txt 文件），最大 50MB
                   </p>
                   <div className="mt-4 flex items-center justify-center gap-2">
                     <Sparkles className="h-4 w-4 text-primary" />
@@ -702,9 +702,9 @@ export function AIImportWizard({
 
         {/* ─── Step 1: Preview ────────────────────── */}
         {step === 1 && fileTree && (
-          <div className="flex h-[calc(100vh-220px)] overflow-hidden">
+          <div style={{ position: "absolute", inset: 0, display: "flex", overflow: "hidden" }}>
             {/* Left: File Tree */}
-            <div className="w-[260px] border-r flex flex-col">
+            <div className="w-[260px] border-r flex flex-col min-h-0 overflow-hidden">
               <div className="px-4 py-3 border-b">
                 <div className="flex items-center gap-2">
                   <Upload className="h-4 w-4 text-muted-foreground" />
@@ -716,24 +716,27 @@ export function AIImportWizard({
                   </Badge>
                 </div>
               </div>
-              <ScrollArea className="flex-1">
+              <div className="flex-1 overflow-y-auto">
                 <div className="py-2">
-                  <FileTreeItem
-                    node={fileTree}
-                    depth={0}
-                    selectedFile={selectedPreviewFile}
-                    onSelect={setSelectedPreviewFile}
-                    parentPath=""
-                  />
+                  {(fileTree.children ?? []).map((child) => (
+                    <FileTreeItem
+                      key={child.name}
+                      node={child}
+                      depth={0}
+                      selectedFile={selectedPreviewFile}
+                      onSelect={setSelectedPreviewFile}
+                      parentPath=""
+                    />
+                  ))}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Right: File Preview */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {selectedFile ? (
                 <>
-                  <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/20">
+                  <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/20 shrink-0">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">
@@ -750,11 +753,11 @@ export function AIImportWizard({
                       {formatSize(selectedFile.size)}
                     </span>
                   </div>
-                  <ScrollArea className="flex-1">
+                  <div className="flex-1 overflow-y-auto">
                     <pre className="text-sm text-muted-foreground p-6 whitespace-pre-wrap font-mono">
                       {selectedFile.content}
                     </pre>
-                  </ScrollArea>
+                  </div>
                 </>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -767,7 +770,7 @@ export function AIImportWizard({
 
         {/* ─── Step 2: AI Mapping Table ─────────────── */}
         {step === 2 && (
-          <div className="flex flex-col h-[calc(100vh-220px)] overflow-hidden">
+          <div className="flex flex-col" style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
             {mappingRows.length === 0 ? (
               /* Not yet analyzed — show analyze prompt */
               <div className="flex items-center justify-center h-full">
@@ -830,7 +833,7 @@ export function AIImportWizard({
 
         {/* ─── Step 3: F15 Progress + Summary ─────── */}
         {step === 3 && (
-          <div className="max-w-2xl mx-auto p-6 space-y-6">
+          <div className="max-w-2xl mx-auto p-6 space-y-6" style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
             {/* F15 Progress Panel */}
             {importProgress && (
               <Card className="p-6">

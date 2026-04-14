@@ -1032,3 +1032,622 @@ POST /api/comparison/{id}/backfill 传入不存在于 `competitors` 表的 `comp
 
 ### 受影响文件
 - `api/routers/comparison.py:284-288`（新增 competitor 存在性校验）
+
+---
+
+## BUG-085: Next.js 读不到 .env，Drizzle 以系统用户 root 连接 PostgreSQL 失败
+
+- **日期**: 2026-04-15
+- **严重度**: Critical (阻塞注册/登录)
+- **来源**: 部署后实际使用
+- **状态**: 已修复
+
+### 现象
+点击注册提交后页面无响应（无跳转、无错误提示）。Server Action 报错：`PostgresError: password authentication failed for user "root"`。
+
+### 根因
+`.env` 文件位于项目根目录 `/root/cy/prism/.env`，但 Next.js 从 `/root/cy/prism/web/` 启动，只读取 `web/.env` 或 `web/.env.local`。`web/` 下无 `.env` 文件，导致 `process.env.DATABASE_URL` 为 `undefined`。
+
+`postgres` 驱动（`web/src/db/index.ts:6`）在 `connectionString` 为 `undefined` 时回退到默认行为：使用系统用户名 `root` + 无密码连接本地 PostgreSQL，认证失败。
+
+前端 `register` Server Action（`src/actions/auth.ts:29`）的 `db.select()` 抛出异常，被 `catch` 捕获后返回 `actionError(error)`，但 `RegisterForm` 的错误处理只检查 `result.error`（string），而 `actionError` 返回的错误对象格式可能不含可显示的 message，导致页面"无响应"（实际是静默失败）。
+
+### 修复
+在 `web/` 目录下创建 `.env.local` 软链接指向项目根目录 `.env`：
+```bash
+ln -s /root/cy/prism/.env /root/cy/prism/web/.env.local
+```
+
+### 受影响文件
+- `web/src/db/index.ts:5-6`（connectionString 为 undefined 时无报错）
+- `web/.env.local`（新增，软链接到 ../.env）
+
+---
+
+## BUG-086: 注册页面点击提交无响应——DB 连接池 + 错误静默吞掉
+
+- **日期**: 2026-04-15
+- **严重度**: High (核心功能不可用)
+- **状态**: 已修复
+
+### 现象
+
+访问 `/register` 页面，填写完表单点击"注册"按钮后，页面无任何响应——无跳转、无错误提示、无 loading 状态变化。浏览器 Network 面板可见 POST 请求返回 500，Server Action 报错 `Connection closed`。
+
+### 根因
+
+**三个问题叠加**：
+
+```
+根因链:
+  1. postgres 客户端在模块顶层创建，dev 模式下 HMR 不会重新执行模块初始化
+     → 旧 postgres 连接池在 Turbopack 热更新后变为 stale
+     → DB 查询抛出 "Connection closed"
+
+  2. Turbopack 对 postgres 模块的打包方式不正确
+     → postgres.js 依赖 Node.js 原生 net/tls 模块
+     → 未加入 serverExternalPackages 时，Turbopack 尝试打包原生模块导致连接异常
+
+  3. RegisterForm.handleSubmit 没有 try-catch
+     → Server Action 抛出异常后，startTransition 内的 await 直接 reject
+     → 没有调用 setError()，用户看到的是"什么都没发生"
+```
+
+**分类**: 基础设施配置缺失 + 防御性编程不足
+
+**为什么 API Route 不受影响**: API Route 和 Server Action 在 Turbopack 中走不同的模块解析路径。API Route 正确加载了 postgres 原生模块，而 Server Action 的模块上下文出现了连接池 stale 问题。
+
+### 修复
+
+**1. `web/src/db/index.ts` — 全局单例模式防止 HMR 创建重复连接池**
+
+```typescript
+const globalForDb = globalThis as unknown as {
+  client: ReturnType<typeof postgres> | undefined;
+};
+const client = globalForDb.client ?? postgres(connectionString);
+if (process.env.NODE_ENV !== "production") globalForDb.client = client;
+```
+
+**2. `web/next.config.ts` — 将 postgres 加入 serverExternalPackages**
+
+```typescript
+serverExternalPackages: ["postgres"],
+```
+
+**3. `web/src/app/register/register-form.tsx` — handleSubmit 增加 try-catch**
+
+```typescript
+startTransition(async () => {
+  try {
+    const result = await register(formData);
+    // ...
+  } catch {
+    setError("注册失败，请稍后重试");
+  }
+});
+```
+
+### 受影响文件
+
+- `web/src/db/index.ts` — DB 客户端单例化
+- `web/next.config.ts` — 添加 serverExternalPackages
+- `web/src/app/register/register-form.tsx` — 错误处理兜底
+
+### 教训
+
+1. **Next.js dev 模式下所有数据库/外部连接客户端必须用 globalThis 单例模式**，否则 HMR 会导致连接池 stale
+2. **使用原生 TCP 连接的库（postgres、redis 等）应加入 `serverExternalPackages`**，防止 Turbopack 错误打包
+3. **Server Action 的调用方必须有 try-catch**，否则 500 错误会被 React Transition 静默吞掉，用户看不到任何反馈
+4. **"页面无响应"≠"没发请求"**——可能是请求发了但错误被静默处理，排查时应同时看 Network 和 Server Log
+
+---
+
+## BUG-087: Button asChild 失效导致所有 Link 按钮 icon 与文案串行
+
+- **日期**: 2026-04-15
+- **严重度**: Medium (UI 显示异常，全局影响)
+- **状态**: 已修复
+
+### 现象
+
+项目工作区页面中，"导入文档"、"需求分析"、"查看全景图"等按钮的 icon 和文案垂直串行排列，未水平对齐。全项目共 22 处 `<Button asChild>` 均受影响。
+
+### 根因
+
+```
+根因链:
+  Button 组件（button.tsx）使用 @base-ui/react 的 ButtonPrimitive
+  → asChild prop 被声明但标注为 "currently unused"，直接丢弃（_asChild）
+  → <Button asChild><Link>...</Link></Button> 实际渲染为 <button><a>...</a></button>
+  → button 有 inline-flex 布局，但 a 标签是 inline 元素
+  → a 内部的 svg（icon）和文本不受 flex 布局控制，垂直堆叠
+```
+
+**分类**: 组件库迁移不完整
+
+**为什么会发生**: 项目从 shadcn/ui (Radix) 迁移到 base-ui 时，Button 组件被重写为使用 `@base-ui/react/button`。base-ui 不使用 `asChild` 模式（它用 `render` prop），但旧的 `asChild` 调用点没有被同步修改。Button 组件为了兼容性保留了 `asChild` 参数但注释标注 "unused"，实际丢弃了这个 prop。
+
+### 修复
+
+将 Button 组件改回使用 `@radix-ui/react-slot` 的 Slot 实现 `asChild`：
+
+```typescript
+import { Slot } from "@radix-ui/react-slot"
+
+function Button({ asChild = false, ...props }) {
+  const Comp = asChild ? Slot : "button"
+  return <Comp data-slot="button" className={...} {...props} />
+}
+```
+
+安装了 `@radix-ui/react-slot` 依赖。
+
+### 受影响文件
+
+- `web/src/components/ui/button.tsx` — 核心修复
+- `web/package.json` — 新增 @radix-ui/react-slot 依赖
+
+### 影响范围（22 处 asChild 调用）
+
+- `workspace.tsx` — 5 处（导入文档、需求分析、查看全景图等）
+- `product-lines/[plId]/page.tsx` — 3 处
+- `comparison/page.tsx` — 3 处
+- `issues/page.tsx` — 3 处
+- `analysis/page.tsx` — 3 处
+- `import/import-wizard.tsx` — 2 处
+- `search/page.tsx` — 1 处
+
+### 教训
+
+1. **组件库迁移时，prop 不能只"接受但丢弃"**——如果一个 prop 不再支持，应该在调用方同步修改或在组件内正确实现
+2. **VibeCoding 生成的代码可能混用不同版本的 API 模式**——base-ui 用 `render`，Radix 用 `asChild`，需要在迁移时统一
+3. **"unused" 注释不是修复**——如果 22 个调用点都在用 `asChild`，那它不是 unused，而是 broken
+
+---
+
+## BUG-088: 导入页面文件格式说明前后矛盾
+
+- **日期**: 2026-04-15
+- **严重度**: Low (文案问题，不影响功能)
+- **状态**: 已修复
+
+### 现象
+
+导入文档页面（手动映射 / AI 智能导入），上传区域的文案描述前后矛盾：
+- 大字提示："拖拽 ZIP 文件到这里"
+- 小字说明："支持 Markdown、CSV、纯文本格式"
+
+用户困惑：到底是上传 ZIP 还是上传 Markdown？实际逻辑是上传 ZIP 压缩包，ZIP 内部的文件支持 .md/.csv/.txt 格式。文案没有表达清楚这层关系。
+
+### 根因
+
+VibeCoding 生成文案时，把"ZIP 包"和"包内文件格式"写在了两句不相关的描述里，缺乏逻辑衔接，读起来像是两个独立的支持列表。
+
+### 修复
+
+统一文案为："上传 .zip 压缩包（内含 .md / .csv / .txt 文件），最大 50MB"
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/import/import-wizard.tsx` — 手动映射上传区
+- `web/src/components/ai-import-wizard.tsx` — AI 导入上传区
+
+---
+
+## BUG-089: 导入页面重复显示两个"导入文档"标题
+
+- **日期**: 2026-04-15
+- **严重度**: Low (UI 冗余)
+- **状态**: 已修复
+
+### 现象
+
+点击"导入文档"进入导入页面后，页面顶部出现两个"导入文档"标题：一个来自外层 `ImportPageClient` 的 header，一个来自内嵌的 `ImportWizard` 自带的 standalone header。
+
+### 根因
+
+```
+根因链:
+  ImportWizard 组件有 standalone 参数（默认 true）
+  → standalone=true 时渲染自己的 header（含"导入文档"标题）
+  → ImportPageClient 已经有自己的 header（也含"导入文档"标题）
+  → ImportPageClient 调用 ImportWizard 时未传 standalone={false}
+  → 两层 header 同时渲染
+```
+
+**分类**: 组件集成遗漏
+
+### 修复
+
+`import-page-client.tsx` 调用 `ImportWizard` 时传入 `standalone={false}`。
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/import/import-page-client.tsx`
+
+---
+
+## BUG-090: 上传 ZIP 文件报错 "fail to fetch"——Server Action body 限制 1MB
+
+- **日期**: 2026-04-15
+- **严重度**: High (核心导入功能不可用)
+- **状态**: 已修复
+
+### 现象
+
+导入页面上传 ZIP 文件后报错 "fail to fetch"。服务端日志：`Body exceeded 1 MB limit`。
+
+### 根因
+
+Next.js Server Action 默认 body 大小限制为 1MB。上传的 ZIP 文件通过 Server Action 传输，超出限制后请求被拒绝。前端收到网络错误，显示 "fail to fetch"。
+
+页面文案标注"最大 50MB"，但实际未配置 `serverActions.bodySizeLimit`，默认只有 1MB。
+
+### 修复
+
+`next.config.ts` 增加 `serverActions.bodySizeLimit: "50mb"`，与页面文案一致。
+
+### 受影响文件
+
+- `web/next.config.ts`
+
+### 教训
+
+1. **文案承诺的能力必须有配置兜底**——页面写"最大 50MB"但实际框架默认 1MB，属于"宣传与实现不一致"
+2. **Server Action 用于文件上传时，必须显式配置 bodySizeLimit**——Next.js 默认 1MB 对文件上传场景远远不够
+
+---
+
+## BUG-091: 导入预览区域无法滚动
+
+- **日期**: 2026-04-15
+- **严重度**: Medium (预览不可用)
+- **状态**: 已修复
+
+### 现象
+
+上传 ZIP 后进入预览步骤，文件内容超出可视区域但无法滚动查看。左侧文件树和右侧内容预览均无滚动条。
+
+### 根因
+
+```
+根因链:
+  原始代码用 h-[calc(100vh-180px)] 硬编码高度
+  → 嵌套在 ImportPageClient 时多了一层 header + tab，实际可用高度不匹配
+  → 改用 flex-1 + min-h-0 后仍不生效
+  → 原因：flex 高度约束需要从最外层（body）逐层传递到叶子节点
+  → 中间经过 8+ 层嵌套（body → layout → ProjectRoleProvider → ImportPageClient → ImportWizard → stepContent → previewContainer → scrollPanel）
+  → 任何一层缺少 min-h-0 或 overflow-hidden，整条链断裂，高度约束丢失
+  → ScrollArea / overflow-y-auto 的容器没有确定的高度，无法产生滚动
+```
+
+**分类**: CSS 布局架构问题 + base-ui ScrollArea 在深层 flex 嵌套中表现异常
+
+### 修复
+
+**放弃 flex 链条传递高度的方案**，改用 `position: absolute + inset: 0`：
+
+1. Step Content 容器设 `position: relative; flex: 1; min-height: 0`
+2. 每个 step 的内容设 `position: absolute; inset: 0`
+3. 这样每个 step 内容获得了**确定的宽高**（等于父容器尺寸），不依赖 flex 链条
+4. 内部的 `overflow-y: auto` 有了确定的高度约束，滚动条��常出现
+
+同时将 base-ui ScrollArea 替换为原生 `overflow-y: auto`，减少一层抽象。
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/import/import-page-client.tsx` — 外层改 fixed + flex
+- `web/src/app/projects/[projectId]/import/import-wizard.tsx` — step content 改 relative/absolute
+- `web/src/components/ai-import-wizard.tsx` — 同步改法
+
+### 教训
+
+1. **flex 高度传递在深层嵌套中极其脆弱**——超过 4-5 层嵌套时，`flex-1 + min-h-0` 链条容易断裂，排查困难
+2. **`position: absolute + inset: 0` 是确定容器尺寸的兜底方案**——不依赖父级链条，只要直接父元素有 `position: relative` 和确定尺寸就够了
+3. **先写最小可复现测试页验证方案可行，再应用到实际组件**���—本次通过 scroll-debug 页面确认了布局方案本身没问题，快速定位了问题在组件嵌套层级
+
+---
+
+## BUG-092: 导入预览点击文件后右侧不显示内容
+
+- **日期**: 2026-04-15
+- **严重度**: High (预览功能完全不可用)
+- **状态**: 已修复
+
+### 现象
+
+上传 ZIP 进入预览步骤后，点击左侧文件树中的文件，右侧预览区域不显示任何内容，始终停留在"选择左侧文件查看预览"。
+
+### 根因
+
+```
+根因链:
+  后端返回 file.path = "数据流/推理服务生命周期.md"（从 root 子目录开始）
+  前端 FileTreeItem 从 root 节点开始构建 nodePath
+  → root 节点 parentPath="" → nodePath = "root"
+  → 子文件夹 parentPath="root" → nodePath = "root/数据流"
+  → 文件 nodePath = "root/数据流/推理服务生命周期.md"
+  → parsedFiles.find(f => f.path === selectedPreviewFile) 永远不匹配
+  → selectedFile 始终为 undefined
+```
+
+**分类**: 前后端数据契约不一致
+
+### 修复
+
+FileTreeItem 渲染时跳过 root 节点，直接渲染 `fileTree.children`，使前端构建的路径与后端 `file.path` 一致。
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/import/import-wizard.tsx`
+- `web/src/components/ai-import-wizard.tsx`
+
+---
+
+## BUG-093: 导入预览左右面板滚动互相干扰
+
+- **日期**: 2026-04-15
+- **严重度**: Medium (操作不便)
+- **状态**: 已修复（与 BUG-091 同一修复解决）
+
+### 现象
+
+预览步骤中，鼠标在左侧文件树滚动时，右侧内容也跟着滚动（或反之）。预期：左右面板独立滚动。
+
+### 根因
+
+与 BUG-091 同源：flex 嵌套链断裂导致左右面板没有确定的高度约束，`overflow-y: auto` 无法生效，滚轮事件冒泡到外层。
+
+### 修复
+
+BUG-091 的 absolute 定位方案同时解决了此问题——左右面板各自有独立的 `overflow-y: auto` 容器，且容器有确定的高度。
+
+### 受影响文件
+
+同 BUG-091
+
+---
+
+## BUG-094: "use server" 文件导出非 async 对象导致页面崩溃
+
+- **日期**: 2026-04-15
+- **严重度**: Critical (阻塞整个项目页面加载)
+- **状态**: 已修复
+
+### 现象
+
+访问项目页面时页面崩溃，显示错误：`A "use server" file can only export async functions, found object`，指向 `src/actions/issues.ts`。
+
+### 根因
+
+```
+根因链:
+  issues.ts 顶部声明 "use server"
+  → 第 16 行 export const CATEGORY_DIMENSION_MAP = {...}（object，非 async function）
+  → Next.js 16 严格检查：use server 文件只允许导出 async function
+  → 模块加载失败
+  → 依赖链：issues.ts ← versions.ts ← export.ts
+  → 整个 action 模块链加载失败，项目页面无法渲染
+```
+
+**分类**: Next.js 版本升级的 breaking change
+
+**为什么会发生**: Next.js 14/15 对 "use server" 文件的导出检查较宽松，允许导出 type/interface/const。Next.js 16 收紧了这个检查，只允许 async function。项目升级 Next.js 版本后这个不兼容没被发现。
+
+### 修复
+
+去掉 `CATEGORY_DIMENSION_MAP` 的 `export` 关键字，改为模块内部常量。该常量已在 `issue-card.tsx` 中有独立副本供前端使用。
+
+### 受影响文件
+
+- `web/src/actions/issues.ts`
+
+---
+
+## BUG-095: AI 导入分析报"未登录"——Server Action 调 FastAPI 缺少认证
+
+- **日期**: 2026-04-15
+- **严重度**: High (AI 导入功能完全不可用)
+- **状态**: 已修复
+
+### 现象
+
+导入页面选"AI 智能导入"，上传 ZIP 后触发 AI 分析，页面报错"未登录"。
+
+### 根因
+
+```
+根因链:
+  用户在浏览器登录 → Next.js session (JWT, cookie-based)
+  → 点击"AI 分析" → 前端调 server action aiAnalyzeZip()
+  → server action 通过 requireAuth() 验证用户身份（基于 Next.js session）✓
+  → server action 调 FastAPI: fetch("http://localhost:8001/api/import/ai-analyze", { headers: { "Content-Type": "application/json" } })
+  → FastAPI 的 require_user 检查 Authorization header → 没有 → 返回 401 "未登录"
+```
+
+**分类**: 服务间认证缺失
+
+**为什么会发生**: Next.js 和 FastAPI 使用不同的认证体系。Next.js 用 Auth.js (JWT cookie)，FastAPI 用 Bearer token。Server action 在 Next.js 侧已经验证了用户身份，但调用 FastAPI 时没有传递任何认证信息。
+
+之前的 E2E 测试直接用 curl 调 FastAPI 并手动传 Bearer token，绕过了 Next.js → FastAPI 这条路径，所以没发现。
+
+### 修复
+
+**1. FastAPI `require_user` 增加内部服务 token 认证**
+
+```python
+def require_user(
+    authorization: str | None = Header(None),
+    x_internal_token: str | None = Header(None),
+    x_user_id: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> User:
+    # 内部服务认证：Next.js server action → FastAPI
+    internal_token = os.environ.get("INTERNAL_TOKEN", "")
+    if x_internal_token and len(internal_token) >= 16 and x_user_id:
+        if hmac.compare_digest(x_internal_token, internal_token):
+            user = db.query(User).filter(User.id == x_user_id).first()
+            if user and user.status == "active":
+                return user
+    # 原有 Bearer token 认证...
+```
+
+**2. Server action 调 FastAPI 时带上内部认证 header**
+
+```typescript
+headers: {
+  "Content-Type": "application/json",
+  "X-Internal-Token": INTERNAL_TOKEN,
+  "X-User-Id": user.id,
+}
+```
+
+**安全加固**:
+- `hmac.compare_digest` 防时序攻击
+- `len(internal_token) >= 16` 防空/短 token 意外通过
+- `user.status == "active"` 禁用用户不能通过内部认证
+- 只走 localhost 通信，不经外部网络
+
+### 受影响文件
+
+- `api/routers/auth.py` — require_user 增加内部 token 认证
+- `web/src/actions/import-ai.ts` — 4 处 fetch 调用增加认证 header
+
+### 教训
+
+1. **双系统认证必须有桥接方案**——Next.js session 和 FastAPI Bearer token 是两套体系，服务间调用需要显式的认证传递
+2. **"server action 里已经 requireAuth 了"不等于"下游 API 也认证了"**——认证是每一跳都需要的，不能假设上游验证过就够了
+3. **内部服务间认证用共享 secret + 用户 ID 传递，不要用用户的 JWT token 转发**——JWT token 是给客户端用的，服务间用专用的 internal token 更安全可控
+
+---
+
+## BUG-096: 项目设置页面没有入口
+
+- **日期**: 2026-04-15
+- **严重度**: Medium (功能不可达)
+- **状态**: 已修复
+
+### 现象
+
+项目工作区页面没有任何链接或按钮可以进入项目设置页面（`/projects/{id}/settings`）。页面存在但用户无法发现。
+
+### 根因
+
+VibeCoding 生成了设置页面组件和路由，但没有在工作区侧边栏添加导航入口。
+
+### 修复
+
+在工作区侧边栏底部（文件树下方）添加"项目设置"按钮，使用 `Settings` 图标 + Link 导航到 `/projects/{id}/settings`。
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/workspace.tsx`
+
+---
+
+## BUG-097: AI Provider 下拉没有 DeepSeek 选项 + 后端校验不允许 deepseek
+
+- **日期**: 2026-04-15
+- **严重度**: Medium (DeepSeek 用户无法配置)
+- **状态**: 已修复
+
+### 现象
+
+项目设置页面 AI 配置下拉列表没有 DeepSeek 选项。后端 `ai_provider.py` 支持 deepseek，但前端下拉和后端校验都遗漏了。
+
+### 根因
+
+```
+根因链（三处不一致）:
+  api/services/ai_provider.py → provider_map 包含 "deepseek" ✓
+  web/src/actions/projects.ts → validProviders 不包含 "deepseek" ✗
+  web/src/app/.../settings/page.tsx → SelectItem 没有 deepseek 选项 ✗
+```
+
+三个文件各自维护一份 provider 列表，没有单一真相源。新增 provider 时只改了后端实现，没有同步前端下拉和 server action 校验。
+
+### 修复
+
+1. `settings/page.tsx` — 下拉列表添加 `<SelectItem value="deepseek">DeepSeek API</SelectItem>`
+2. `actions/projects.ts` — `validProviders` 数组添加 `"deepseek"`
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/settings/page.tsx`
+- `web/src/actions/projects.ts`
+
+---
+
+## BUG-098: AI 配置保存失败静默吞掉错误
+
+- **日期**: 2026-04-15
+- **严重度**: Medium (用户以为保存成功，实际没保存)
+- **状态**: 已修复
+
+### 现象
+
+项目设置页面保存 AI 配置（选 DeepSeek + 填 API Key + 点保存），页面没有任何反馈，但实际没保存。原因是 BUG-097 的校验拦截了，但前端没检查返回值。
+
+### 根因
+
+```
+handleSaveAI() {
+  await updateProjectAIConfig(...)  // 返回 { success: false, error: "无效的AI提供商" }
+  setAiApiKey("")                   // 照常清空，用户以为成功
+  setSaving(false)                  // 按钮恢复，无错误提示
+}
+```
+
+`handleSaveAI` 没有检查 `updateProjectAIConfig` 的返回值，无论成功失败都执行后续操作。
+
+**分类**: 前端错误处理缺失（与 BUG-086 同类问题）
+
+### 修复
+
+`handleSaveAI` 检查返回值，失败时 alert 显示错误信息，成功时才清空 API Key 输入框。
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/settings/page.tsx`
+
+### 教训
+
+1. **Provider 列表必须有单一真相源**——后端 provider_map、前端下拉、server action 校验三处分别维护同一份列表，新增 provider 时极易遗漏
+2. **所有 server action 的调用方都必须检查返回值**——这是本次测试第三次发现的同类问题（BUG-086 注册、BUG-098 设置保存），说明是系统性的编码模式缺陷
+
+---
+
+## BUG-099: AI 配置保存成功后无视觉反馈，用户以为没保存
+
+- **日期**: 2026-04-15
+- **严重度**: Medium (用户体验)
+- **状态**: 已修复
+
+### 现象
+
+项目设置页面保存 AI 配置（DeepSeek + API Key）后，API Key 输入框清空，页面无任何成功提示。刷新后 AI Provider 下拉正确显示 DeepSeek，但 API Key 输入框仍为空。用户以为没保存成功，反复保存。
+
+### 根因
+
+```
+根因链:
+  1. API Key 加密存储后不回显原文（安全设计，正确）
+  2. 保存成功后 setAiApiKey("") 清空输入框（正确）
+  3. 但页面没有任何状态指示 "key 已配置"
+  4. 刷新页面后 aiApiKeyEnc 有值，但前端没读取这个状态
+  → 用户看到空的输入框，无法判断是"未配置"还是"已配置但不显示"
+```
+
+**分类**: 功能可用但反馈缺失
+
+### 修复
+
+1. 新增 `aiKeyConfigured` 状态，加载项目数据时根据 `aiApiKeyEnc` 是否有值设置
+2. 保存成功且 key 非空时设 `aiKeyConfigured = true`
+3. API Key 输入框上方显示绿色"已配置（重新输入可更换密钥）"
+4. placeholder 从 "sk-..." 改为 "已配置，留空保持不变"
+
+### 受影响文件
+
+- `web/src/app/projects/[projectId]/settings/page.tsx`

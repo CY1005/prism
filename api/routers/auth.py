@@ -39,9 +39,20 @@ router = APIRouter()
 
 def require_user(
     authorization: str | None = Header(None),
+    x_internal_token: str | None = Header(None),
+    x_user_id: str | None = Header(None),
     db: Session = Depends(get_db),
 ) -> User:
-    """Dependency that requires a valid access token."""
+    """Dependency that requires a valid access token or internal service token."""
+    import os, hmac
+    # Internal service-to-service auth (Next.js server actions → FastAPI)
+    internal_token = os.environ.get("INTERNAL_TOKEN", "")
+    if x_internal_token and len(internal_token) >= 16 and x_user_id:
+        if hmac.compare_digest(x_internal_token, internal_token):
+            user = db.query(User).filter(User.id == x_user_id).first()
+            if user and user.status == "active":
+                return user
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="未登录")
     token = authorization[7:]

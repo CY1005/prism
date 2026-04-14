@@ -8,6 +8,7 @@ import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/e
 import { logActivity } from "./activity-log";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8001";
+const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? "";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -99,7 +100,11 @@ export async function aiAnalyzeZip(
 
     const res = await fetch(`${API_BASE}/api/import/ai-analyze`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Token": INTERNAL_TOKEN,
+        "X-User-Id": user.id,
+      },
       body: JSON.stringify({
         project_id: projectId,
         user_id: user.id,
@@ -148,7 +153,7 @@ export async function aiAdjustMapping(
 
     await fetch(`${API_BASE}/api/import/ai-mapping`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Internal-Token": INTERNAL_TOKEN, "X-User-Id": user.id },
       body: JSON.stringify({
         session_id: sessionId,
         project_id: projectId,
@@ -179,7 +184,7 @@ export async function aiConfirmImport(
 
     const res = await fetch(`${API_BASE}/api/import/ai-confirm`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Internal-Token": INTERNAL_TOKEN, "X-User-Id": user.id },
       body: JSON.stringify({
         session_id: sessionId,
         project_id: projectId,
@@ -250,7 +255,7 @@ export async function aiUndoImport(
 
     const res = await fetch(`${API_BASE}/api/import/undo`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Internal-Token": INTERNAL_TOKEN, "X-User-Id": user.id },
       body: JSON.stringify({
         session_id: sessionId,
         project_id: projectId,

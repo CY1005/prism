@@ -13,7 +13,7 @@ const VALID_CATEGORIES = ["bug", "tech_debt", "design_flaw", "performance"] as c
 type IssueCategory = (typeof VALID_CATEGORIES)[number];
 
 // ADR-012: 问题按分类自动关联到对应维度
-export const CATEGORY_DIMENSION_MAP: Record<IssueCategory, string> = {
+const CATEGORY_DIMENSION_MAP: Record<IssueCategory, string> = {
   bug: "test_analysis",
   tech_debt: "engineering_exp",
   design_flaw: "design_decision",

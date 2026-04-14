@@ -326,7 +326,7 @@ export async function updateProjectAIConfig(
     const user = await requireAuth();
     await checkProjectAccess(user.id, projectId, "admin");
 
-    const validProviders = ["local", "claude", "codex", "kimi"];
+    const validProviders = ["local", "claude", "codex", "kimi", "deepseek"];
     if (!validProviders.includes(provider)) {
       return actionError(new AppError("无效的AI提供商", "blocking", "VALIDATION_ERROR"));
     }

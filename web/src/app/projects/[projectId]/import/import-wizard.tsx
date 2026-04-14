@@ -514,7 +514,7 @@ export function ImportWizard({
   // ─── Render ───────────────────────────────────
 
   const innerContent = (
-    <div className="flex flex-col" style={standalone ? { minHeight: "100vh" } : { flex: 1 }}>
+    <div style={standalone ? { display: "flex", flexDirection: "column" as const, minHeight: "100vh" } : { display: "flex", flexDirection: "column" as const, flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* Header — only in standalone mode */}
       {standalone && (
         <header className="flex h-14 items-center justify-between border-b px-6">
@@ -536,11 +536,11 @@ export function ImportWizard({
       )}
 
       {/* Step Indicator */}
-      <div className="px-6 py-4">
+      <div className="px-6 py-4 shrink-0">
         <StepIndicator currentStep={step} steps={STEPS} />
       </div>
 
-      <Separator />
+      <Separator className="shrink-0" />
 
       {/* Error */}
       {error && (
@@ -554,10 +554,10 @@ export function ImportWizard({
       )}
 
       {/* Step Content */}
-      <div className="flex-1 overflow-hidden">
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
         {/* ─── Step 0: Upload ─────────────────────── */}
         {step === 0 && (
-          <div className="flex items-center justify-center h-full p-6">
+          <div className="flex items-center justify-center p-6" style={{ position: "absolute", inset: 0 }}>
             <Card
               className={cn(
                 "w-full max-w-lg border-2 border-dashed p-12 text-center transition-colors cursor-pointer",
@@ -592,10 +592,10 @@ export function ImportWizard({
               ) : (
                 <>
                   <p className="text-lg font-medium">
-                    拖拽 ZIP 文件到这里，或点击选择
+                    拖拽 ZIP 压缩包到这里，或点击选择
                   </p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    支持 Markdown、CSV、纯文本格式，最大 50MB
+                    上传 .zip 压缩包（内含 .md / .csv / .txt 文件），最大 50MB
                   </p>
                 </>
               )}
@@ -605,10 +605,10 @@ export function ImportWizard({
 
         {/* ─── Step 1: Preview ────────────────────── */}
         {step === 1 && fileTree && (
-          <div className="flex h-[calc(100vh-180px)] overflow-hidden">
+          <div style={{ position: "absolute", inset: 0, display: "flex", overflow: "hidden" }}>
             {/* Left: File Tree */}
-            <div className="w-[260px] border-r flex flex-col">
-              <div className="px-4 py-3 border-b">
+            <div style={{ width: 260, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div className="px-4 py-3 border-b" style={{ flexShrink: 0 }}>
                 <div className="flex items-center gap-2">
                   <Upload className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium truncate">
@@ -619,24 +619,27 @@ export function ImportWizard({
                   </Badge>
                 </div>
               </div>
-              <ScrollArea className="flex-1">
+              <div style={{ flex: 1, overflowY: "auto" }}>
                 <div className="py-2">
-                  <FileTreeItem
-                    node={fileTree}
-                    depth={0}
-                    selectedFile={selectedPreviewFile}
-                    onSelect={setSelectedPreviewFile}
-                    parentPath=""
-                  />
+                  {(fileTree.children ?? []).map((child) => (
+                    <FileTreeItem
+                      key={child.name}
+                      node={child}
+                      depth={0}
+                      selectedFile={selectedPreviewFile}
+                      onSelect={setSelectedPreviewFile}
+                      parentPath=""
+                    />
+                  ))}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Right: File Preview */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
               {selectedFile ? (
                 <>
-                  <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/20">
+                  <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/20" style={{ flexShrink: 0 }}>
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">
@@ -653,11 +656,11 @@ export function ImportWizard({
                       {formatSize(selectedFile.size)}
                     </span>
                   </div>
-                  <ScrollArea className="flex-1">
+                  <div style={{ flex: 1, overflowY: "auto" }}>
                     <pre className="text-sm text-muted-foreground p-6 whitespace-pre-wrap font-mono">
                       {selectedFile.content}
                     </pre>
-                  </ScrollArea>
+                  </div>
                 </>
               ) : (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -670,7 +673,7 @@ export function ImportWizard({
 
         {/* ─── Step 2: Mapping ────────────────────── */}
         {step === 2 && folders.length === 0 && (
-          <div className="flex items-center justify-center h-[calc(100vh-180px)] p-6">
+          <div className="flex items-center justify-center p-6" style={{ position: "absolute", inset: 0 }}>
             <Card className="max-w-md p-8 text-center border-dashed border-2">
               <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-yellow-500" />
               <h3 className="text-lg font-semibold mb-2">无法映射文件</h3>
@@ -684,7 +687,7 @@ export function ImportWizard({
           </div>
         )}
         {step === 2 && folders.length > 0 && (
-          <div className="flex flex-col h-[calc(100vh-180px)] overflow-hidden">
+          <div className="flex flex-col" style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
             {/* Bulk Actions Bar */}
             <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/20">
               <div className="flex items-center gap-4">
@@ -845,7 +848,7 @@ export function ImportWizard({
 
         {/* ─── Step 3: Confirm ────────────────────── */}
         {step === 3 && (
-          <div className="max-w-2xl mx-auto p-6 space-y-6">
+          <div className="max-w-2xl mx-auto p-6 space-y-6" style={{ position: "absolute", inset: 0, overflowY: "auto" }}>
             <Card className="p-6">
               <h2 className="text-lg font-semibold mb-4">导入确认</h2>
               <div className="space-y-3">

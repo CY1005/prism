@@ -16,11 +16,15 @@ export function RegisterForm() {
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const result = await register(formData);
-      if (result.success) {
-        router.push("/projects");
-      } else {
-        setError(result.error);
+      try {
+        const result = await register(formData);
+        if (result.success) {
+          router.push("/projects");
+        } else {
+          setError(result.error);
+        }
+      } catch {
+        setError("注册失败，请稍后重试");
       }
     });
   }

@@ -21,6 +21,7 @@ import {
   BookOpen,
   Loader2,
   Download,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -497,9 +498,17 @@ export function ProjectWorkspace({
   const handleConfirmAddNode = () => {
     if (!addNodeName.trim()) return;
     startTransition(async () => {
-      await createNode(project.id, addNodeParentId, addNodeName.trim(), addNodeType);
-      setAddNodeDialog(false);
-      refreshPage();
+      try {
+        const result = await createNode(project.id, addNodeParentId, addNodeName.trim(), addNodeType);
+        if (!result.success) {
+          alert(`创建失败: ${result.error}`);
+          return;
+        }
+        setAddNodeDialog(false);
+        refreshPage();
+      } catch (e) {
+        alert(`创建失败: ${e instanceof Error ? e.message : "未知错误"}`);
+      }
     });
   };
 
@@ -788,6 +797,13 @@ export function ProjectWorkspace({
             />
           </div>
         </ScrollArea>
+        <div className="px-3 py-2 border-t">
+          <Button variant="ghost" size="sm" className="w-full justify-start text-sm text-muted-foreground" asChild>
+            <Link href={`/projects/${project.id}/settings`}>
+              <Settings className="h-4 w-4 mr-2" /> 项目设置
+            </Link>
+          </Button>
+        </div>
       </aside>
 
       {/* Main Content */}

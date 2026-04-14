@@ -39,9 +39,9 @@ export function ImportPageClient({
   const [mode, setMode] = useState<ImportMode>("manual");
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background">
       {/* Header */}
-      <header className="flex h-14 items-center justify-between border-b px-6">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b px-6">
         <div className="flex items-center gap-3">
           <Link
             href={`/projects/${projectId}`}
@@ -102,13 +102,14 @@ export function ImportPageClient({
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {mode === "manual" ? (
           <ImportWizard
             projectId={projectId}
             projectName={projectName}
             folders={folders}
             dimensions={dimensions}
+            standalone={false}
           />
         ) : mode === "ai" ? (
           <AIImportWizard

@@ -121,6 +121,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
   const [level3, setLevel3] = useState("功能项")
   const [aiProvider, setAiProvider] = useState("local")
   const [aiApiKey, setAiApiKey] = useState("")
+  const [aiKeyConfigured, setAiKeyConfigured] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("viewer")
   const [saving, setSaving] = useState(false)
@@ -154,6 +155,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
           setLevel3(labels[2])
         }
         setAiProvider(p.aiProvider || "local")
+        setAiKeyConfigured(!!p.aiApiKeyEnc)
       }
     })
     loadMembers()
@@ -275,9 +277,13 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
 
   const handleSaveAI = async () => {
     setSaving(true)
-    // Pass raw key — server action handles encryption
-    await updateProjectAIConfig(projectId, aiProvider, aiApiKey || null)
-    setAiApiKey("")
+    const result = await updateProjectAIConfig(projectId, aiProvider, aiApiKey || null)
+    if (!result.success) {
+      alert(`保存失败: ${result.error}`)
+    } else {
+      if (aiApiKey) setAiKeyConfigured(true)
+      setAiApiKey("")
+    }
     setSaving(false)
   }
 
@@ -666,6 +672,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="local">本地模式</SelectItem>
+                      <SelectItem value="deepseek">DeepSeek API</SelectItem>
                       <SelectItem value="claude">Claude API</SelectItem>
                       <SelectItem value="codex">Codex API</SelectItem>
                       <SelectItem value="kimi">Kimi API</SelectItem>
@@ -674,7 +681,10 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
                 </div>
                 <div className="space-y-2">
                   <Label>API Key</Label>
-                  <Input type="password" placeholder="sk-..." value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)} />
+                  {aiKeyConfigured && !aiApiKey && (
+                    <p className="text-xs text-green-600">已配置（重新输入可更换密钥）</p>
+                  )}
+                  <Input type="password" placeholder={aiKeyConfigured ? "已配置，留空保持不变" : "sk-..."} value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)} />
                   <p className="text-xs text-muted-foreground">密钥将加密存储，保存后不可查看原文</p>
                 </div>
                 <Button
