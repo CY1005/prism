@@ -15,9 +15,12 @@ class SearchResultItem(BaseModel):
     breadcrumb: list[str] | None = None  # F9: human-readable path segments
     highlight_positions: list[dict] | None = None  # F9: keyword match positions
     relevance: str = "keyword"  # "keyword" | "semantic" (future)
+    match_type: str = "keyword"  # F18: "keyword" | "semantic" | "both"
+    score: float = 0.0  # F18: RRF fusion score (higher = more relevant)
 
 
 class SearchResponse(BaseModel):
     query: str
     total: int
     results: list[SearchResultItem]
+    search_mode: str = "keyword"  # F18: "keyword" | "hybrid"

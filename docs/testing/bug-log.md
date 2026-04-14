@@ -504,3 +504,145 @@ Server Action (`import-ai.ts`) 的 3 个函数与后端 Pydantic schema **已经
 2. **组件内定义重复类型**：ai-import-wizard.tsx:282-302 定义了 `AIAnalyzeResult` 和 `AIConfirmResult`，与 import-ai.ts 中的同名类型字段不同。重复类型定义是契约漂移的温床。**应统一从 Server Action 导出类型定义**。
 
 3. **直接 fetch vs Server Action**：Next.js Server Action 是前后端契约的唯一桥梁，绕过它不仅丢失类型安全，还丢失认证和权限校验。**前端组件不应直接 fetch 后端 API**。
+
+---
+
+## BUG-063: 语义搜索结果缺失 breadcrumb（F9 面包屑能力回归）
+
+- **日期**: 2026-04-14
+- **严重度**: High
+- **状态**: Open
+- **Phase**: 10 (F18 Hybrid混合搜索)
+
+### 现象
+
+语义搜索命中的结果在搜索页不显示面包屑路径（如"AI云平台 -> 计算服务 -> GPU实例"），只有关键词命中的结果有面包屑。当 RRF 合并后，同一页面中部分结果有面包屑、部分没有，体验不一致。
+
+### 根因
+
+`api/services/hybrid_search.py` 的 `vector_search()` 函数中，三类实体（node/dimension/issue）的返回结果均硬编码 `breadcrumb: None`（行164, 219, 276）。
+
+F9 的关键词搜索通过 ORM Join + `_build_breadcrumb()` 函数构建面包屑，但 F18 的向量搜索使用 raw SQL，没有实现等价的 breadcrumb 构建逻辑。
+
+### 修复建议
+
+在 `vector_search()` 返回结果后，对每个结果调用 `_build_breadcrumb(db, node, project_name)` 补充 breadcrumb。需要传入 ORM Session（当前 `vector_search` 只接收 `db_engine`，不接收 `db` Session）。
+
+**方案A**（推荐）：在 `hybrid_search()` 中，对语义结果中 breadcrumb 为 None 的条目，通过 ORM 查询补充 breadcrumb。
+**方案B**：在 `vector_search` 的 raw SQL 中 JOIN 祖先节点构建 breadcrumb（SQL 复杂度高）。
+
+- **受影响文件**: `api/services/hybrid_search.py:164,219,276`
+
+---
+
+## BUG-064: Issue 向量搜索 SQL 引用不存在的列 `i.type`
+
+- **日期**: 2026-04-14
+- **严重度**: Critical
+- **状态**: Open
+- **Phase**: 10 (F18 Hybrid混合搜索)
+
+### 现象
+
+语义搜索 Issue 类型的结果时，SQL 执行报错：`column i.type does not exist`。导致 Issue 类的语义搜索结果全部丢失。
+
+由于外层 try/except（行279-280）捕获了异常并 warning 跳过，不会导致整个搜索崩溃，但 Issue 的语义结果永远为空。
+
+### 根因
+
+`api/services/hybrid_search.py` 行240和行247使用了 `i.type` 作为 Issue 分类列名，但实际数据库列名为 `i.category`（见 `api/models/tables.py:247` — `category = Column(Text, nullable=False)`）。
+
+行235-241的注释中还残留了一段被覆盖的错误代码：
+```python
+issue_where_parts.append(
+    "(i.type = %s OR (column_name = 'category' AND i.category = %s))"
+)
+# Simplified: just filter on what columns may exist
+issue_where_parts[-1] = "i.type = %s"
+```
+这段代码先 append 了一个包含 `column_name` 的无效 SQL 条件，然后立即用 `i.type` 覆盖——两行都是错的。
+
+### 修复建议
+
+1. 行240: `i.type = %s` 改为 `i.category = %s`
+2. 行247: `issue_type_col = "i.type"` 改为 `issue_type_col = "i.category"`
+3. 删除行235-238的残留注释和无效代码
+
+- **受影响文件**: `api/services/hybrid_search.py:235-241,247`
+
+---
+
+## BUG-065: 前端 SearchResultItem 接口缺少 `score` 字段
+
+- **日期**: 2026-04-14
+- **严重度**: Low
+- **状态**: Open
+- **Phase**: 10 (F18 Hybrid混合搜索)
+
+### 现象
+
+后端通过 Pydantic schema 返回 `score` 字段（RRF 融合得分），但前端 TypeScript 接口 `SearchResultItem` 未定义该字段。当前不影响功能（前端未使用 score），但类型不完整。
+
+### 根因
+
+`web/src/services/search.ts:9-22` 的 `SearchResultItem` 接口在 F18 升级时添加了 `match_type` 但遗漏了 `score`。
+
+### 修复建议
+
+在 `SearchResultItem` 接口中添加 `score?: number;`。
+
+- **受影响文件**: `web/src/services/search.ts:9-22`
+
+---
+
+## BUG-066: `search_mode` 字段被 Pydantic response_model 过滤
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **状态**: Open
+- **Phase**: 10 (F18 Hybrid混合搜索)
+
+### 现象
+
+`hybrid_search()` 返回的 dict 包含 `search_mode: "keyword"|"hybrid"` 字段，但路由 `search_unified()` 使用 `response_model=SearchResponse`，而 `SearchResponse` schema 未定义 `search_mode` 字段。Pydantic 会在序列化时剥离该字段，前端永远收不到。
+
+### 根因
+
+`api/schemas/search.py:22-25` 的 `SearchResponse` 只定义了 `query`, `total`, `results` 三个字段，未包含 `search_mode`。
+
+### 修复建议
+
+在 `SearchResponse` 中添加 `search_mode: str = "keyword"`，前端 `SearchResponse` 接口同步添加。这样前端可以根据 `search_mode` 判断是否为降级模式，修复 BUG-067。
+
+- **受影响文件**: `api/schemas/search.py:22-25`, `web/src/services/search.ts:24-28`
+
+---
+
+## BUG-067: 纯关键词降级模式下"正在加载语义匹配结果..."永远转圈
+
+- **日期**: 2026-04-14
+- **严重度**: High
+- **状态**: Open
+- **Phase**: 10 (F18 Hybrid混合搜索)
+
+### 现象
+
+当 pgvector 不可用（降级到纯关键词搜索）时，搜索结果旁边的"正在加载语义匹配结果..."提示和 spinner 永远不消失。
+
+### 根因
+
+`web/src/app/search/page.tsx` 行119设置 `setSemanticLoading(true)`，行139-146的判断逻辑：
+```typescript
+const hasSemanticInResults = result.data.results.some(
+  (r: SearchResultItem) => r.match_type === "semantic" || r.match_type === "both"
+)
+setSemanticLoading(!hasSemanticInResults)
+```
+在降级模式下，所有结果的 `match_type` 都是 `"keyword"`，`hasSemanticInResults` 永远为 `false`，`semanticLoading` 永远为 `true`。
+
+### 修复建议
+
+**方案A**（需先修复 BUG-066）：根据 `search_mode` 判断，如果是 `"keyword"` 则直接 `setSemanticLoading(false)`。
+**方案B**（无依赖）：搜索完成后统一 `setSemanticLoading(false)`，不再尝试推断语义搜索状态。语义搜索是后端自动执行的，前端无需区分。
+
+- **受影响文件**: `web/src/app/search/page.tsx:119,139-146`

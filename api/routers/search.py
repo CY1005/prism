@@ -3,10 +3,11 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from api.db import get_db
+from api.db import get_db, engine
 from api.models.tables import KnowledgeItem, Node
 from api.schemas.search import SearchResponse
 from api.services.search import unified_search
+from api.services.hybrid_search import hybrid_search
 
 router = APIRouter()
 
@@ -123,7 +124,7 @@ def delete_knowledge_item(item_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/unified", response_model=SearchResponse)
-def search_unified(
+async def search_unified(
     q: str = Query(..., min_length=1),
     project_id: str | None = None,
     dimension_type: str | None = None,
@@ -132,9 +133,15 @@ def search_unified(
     limit: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
-    """F9: Unified search across nodes, dimension records, and issues."""
-    return unified_search(
+    """F18: Hybrid search (BM25 + pgvector semantic + RRF fusion).
+
+    Automatically upgrades F9 keyword search with semantic vector search.
+    Degrades gracefully to pure keyword search if pgvector is unavailable.
+    Each result includes match_type: 'keyword' | 'semantic' | 'both'.
+    """
+    return await hybrid_search(
         db=db,
+        db_engine=engine,
         query=q,
         user_id=user_id,
         project_id=project_id,

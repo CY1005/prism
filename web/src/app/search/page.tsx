@@ -94,6 +94,7 @@ function SearchPageInner() {
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [semanticLoading, setSemanticLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -115,6 +116,7 @@ function SearchPageInner() {
   const doSearch = useCallback(async (q: string, opts?: { dimensionType?: string; issueCategory?: string }) => {
     if (!q.trim()) return
     setLoading(true)
+    setSemanticLoading(true)
     setError(null)
 
     const result = await globalSearch(q.trim(), {
@@ -133,9 +135,17 @@ function SearchPageInner() {
         result.data.results.filter((r: SearchResultItem) => r.project_id).map((r: SearchResultItem) => r.project_id!)
       )
       setSelectedProjects(projectIds)
+      // If any result has semantic match_type, semantic search completed;
+      // also stop if search_mode is "keyword" (pgvector unavailable/degraded)
+      const hasSemanticInResults = result.data.results.some(
+        (r: SearchResultItem) => r.match_type === "semantic" || r.match_type === "both"
+      )
+      const isKeywordOnly = result.data.search_mode === "keyword"
+      setSemanticLoading(!hasSemanticInResults && !isKeywordOnly)
     } else {
       setError(result.error)
       setSearched(true)
+      setSemanticLoading(false)
     }
   }, [])
 
@@ -340,12 +350,20 @@ function SearchPageInner() {
           {/* Results Summary */}
           {searched && !loading && !error && (
             <>
-              <p className="text-sm text-muted-foreground mb-4">
-                {filteredResults.length === total
-                  ? `找到 ${total} 条结果`
-                  : `筛选到 ${filteredResults.length} 条结果（共 ${total} 条）`
-                }
-              </p>
+              <div className="flex items-center gap-3 mb-4">
+                <p className="text-sm text-muted-foreground">
+                  {filteredResults.length === total
+                    ? `找到 ${total} 条结果`
+                    : `筛选到 ${filteredResults.length} 条结果（共 ${total} 条）`
+                  }
+                </p>
+                {semanticLoading && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>正在加载语义匹配结果...</span>
+                  </div>
+                )}
+              </div>
 
               {filteredResults.length === 0 ? (
                 <div className="text-center py-16 text-muted-foreground">
@@ -385,6 +403,22 @@ function SearchPageInner() {
                           className={cn("text-xs", issueKindColor[result.issue_category] || "")}
                         >
                           {issueKindLabel[result.issue_category] || result.issue_category}
+                        </Badge>
+                      )}
+                      {result.match_type === "semantic" && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-violet-200 text-violet-700 bg-violet-50"
+                        >
+                          语义匹配
+                        </Badge>
+                      )}
+                      {result.match_type === "both" && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-violet-200 text-violet-700 bg-violet-50"
+                        >
+                          精确+语义
                         </Badge>
                       )}
                     </div>

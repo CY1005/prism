@@ -1,13 +1,49 @@
+import asyncio
+import logging
+
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import health, search, analyze, projects, auth, settings, comparison, snapshot
 from api.routers import import_ as import_router
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """App lifespan: initialize pgvector on startup, backfill embeddings."""
+    from api.db import engine
+    from api.services.embedding import ensure_embeddings_table
+    from api.services.embedding_worker import (
+        set_pgvector_available,
+        run_backfill_background,
+    )
+
+    # Try to initialize pgvector extension + embeddings table
+    pgvector_ok = ensure_embeddings_table(engine)
+    set_pgvector_available(pgvector_ok)
+
+    if pgvector_ok:
+        logger.info("pgvector ready — launching background embedding backfill")
+        # Non-blocking: backfill runs in background, doesn't delay startup
+        asyncio.create_task(run_backfill_background(engine))
+    else:
+        logger.warning(
+            "pgvector not available — F18 hybrid search degraded to keyword-only. "
+            "Switch docker-compose db image to pgvector/pgvector:pg16 and restart."
+        )
+
+    yield  # app runs here
+    # Cleanup (none needed for now)
+
+
 app = FastAPI(
     title="Prism Analyzer",
     description="AI analysis microservice for Prism knowledge management platform",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

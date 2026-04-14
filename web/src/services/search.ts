@@ -18,12 +18,15 @@ export interface SearchResultItem {
   breadcrumb: string[] | null;
   dimension_type: string | null;
   issue_category: string | null;
+  match_type?: "keyword" | "semantic" | "both";
+  score?: number;
 }
 
 export interface SearchResponse {
   query: string;
   total: number;
   results: SearchResultItem[];
+  search_mode?: "keyword" | "hybrid";
 }
 
 export type SearchResult =

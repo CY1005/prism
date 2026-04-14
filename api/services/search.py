@@ -125,6 +125,10 @@ def unified_search(
             })
     except Exception as e:
         logger.warning("Node search failed: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # 2. Search dimension_records by content (JSONB text cast)
     try:
@@ -164,6 +168,10 @@ def unified_search(
             })
     except Exception as e:
         logger.warning("Dimension search failed: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # 3. Search issues by description + tags
     try:
@@ -208,6 +216,10 @@ def unified_search(
             })
     except Exception as e:
         logger.warning("Issue search failed: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # Deduplicate and limit
     seen = set()

@@ -285,6 +285,21 @@ export const activityLogs = pgTable("activity_logs", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ─── Embeddings (F18 Hybrid Search) ──────────────────────
+// vector type is managed via raw SQL migration (pgvector)
+// Drizzle does not natively support vector; we store as text placeholder
+// Actual vector column is created by api/services/embedding.py init migration
+
+export const embeddings = pgTable("embeddings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  target_type: text("target_type").notNull(), // 'node' | 'dimension_record' | 'issue'
+  target_id: uuid("target_id").notNull(),
+  // embedding column (vector(1536)) is managed by raw SQL, not Drizzle
+  // this placeholder keeps the table visible in Drizzle schema introspection
+  model: text("model").notNull().default("mock"), // 'text-embedding-3-small' | 'mock'
+  updated_at: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // ─── Knowledge Items (shared with FastAPI analyzer) ─────
 
 export const knowledgeItems = pgTable("knowledge_items", {
