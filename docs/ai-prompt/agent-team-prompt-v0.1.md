@@ -54,6 +54,7 @@ UI 原型参考: design/ui-prototype/（复用交互模式和布局）
 规则:
 - 不碰 api/ 和 web/src/db/schema.ts（后端 agent 的领地）
 - API 调用通过 web/src/services/ 或 web/src/actions/ 封装
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建 Server Action 封装，组件只调 Server Action。直接 fetch 会绕过 auth 且导致契约漂移（参考 BUG-043~062 教训）
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件，参考原型代码风格
 
@@ -326,6 +327,7 @@ UI 原型参考:
 规则:
 - 不碰 api/ 和 web/src/db/schema.ts
 - API 调用通过 web/src/actions/ 封装
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件
 
@@ -431,6 +433,7 @@ UI 原型参考: design/ui-prototype/app/search/page.tsx
 
 规则:
 - 不碰 api/ 和 web/src/db/
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件
 
@@ -671,6 +674,7 @@ UI 原型参考:
 
 规则:
 - 不碰 api/ 和 web/src/db/
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件
 
@@ -789,6 +793,7 @@ UI 原型参考:
 
 规则:
 - 不碰 api/ 和 web/src/db/
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件
 
@@ -891,6 +896,7 @@ UI 原型参考: design/ui-prototype/app/projects/[id]/import-ai/page.tsx
 
 规则:
 - 不碰 api/ 和 web/src/db/
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件
 
@@ -990,6 +996,7 @@ ADR:
 
 规则:
 - 不碰 api/ 和 web/src/db/
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 
 ## Agent 3 — QA 测试
@@ -1087,6 +1094,7 @@ UI 原型参考:
 
 规则:
 - 不碰 api/ 和 web/src/db/
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件
 
@@ -1196,6 +1204,7 @@ ADR:
 
 规则:
 - 不碰 api/ 和 web/src/db/
+- **禁止在组件中直接 fetch 后端 API**。必须优先使用 web/src/actions/ 下已有的 Server Action；如不存在则新建，组件只调 Server Action
 - 完成后运行: cd web && npx tsc --noEmit
 - 使用 shadcn/ui 组件
 
