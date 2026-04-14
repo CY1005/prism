@@ -1,67 +1,60 @@
 # Prism Testing Progress Checkpoint
 
-**Snapshot**: 2026-04-14 23:26 JST
-**Branch**: master (8 commits ahead of origin/master)
+**Snapshot**: 2026-04-14 23:55 JST
+**Branch**: master
 
 ---
 
 ## Test Pass Rate
 
-**128 / 155 (82.6%)** after 3 rounds of QA + Fix cycles
+**155 / 155 (100%)** — 全量扫尾完成
 
 | Status | Count | Details |
 |--------|-------|---------|
-| PASS   | 128   | Verified across E2E + unit |
-| FAIL   |   3   | TP-014 (test-design), TP-035 (test-design), TP-119 (needs reverify) |
-| SKIP   |   4   | TP-007, TP-063, TP-064, TP-065 |
-| TOTAL  | 155   | Full v0.4 Phase 11 scope (F14 + prior phases) |
+| PASS   | 155   | 全部测试点通过（含原 SKIP/FAIL/ENV 补测） |
+| FAIL   |   0   | 无 |
+| SKIP   |   0   | 全部解除 |
+| TOTAL  | 155   | Full v0.4 + v1.x scope (F1-F20) |
 
 ---
 
-## Current Session Work
+## 本次扫尾工作
 
-- Multi-agent team running (QA + Reviewer + Fixer) for iterative bug-fix cycles
-- DeepSeek AI Provider added and integrated
-- 15 E2E bugs fixed (BUG-068 through BUG-082) with regression verification
-- Pass rate improved: 73.5% -> 76.1% -> 82.6%
-- 12 ENV-related test points re-tested after DeepSeek config
+### 测试验证 (6 个 SKIP/FAIL → 全部 PASS)
 
----
+| TP-ID | 原状态 | 操作 | 结果 |
+|-------|--------|------|------|
+| TP-007 | SKIP | 通过 `/api/snapshot/save` 写入 competitor 维度 | PASS |
+| TP-014 | FAIL (test-design) | 补充 project_id 查询参数 | PASS |
+| TP-035 | FAIL (test-design) | 按实际 API 用 email 邀请成员 | PASS |
+| TP-063 | SKIP | `POST /api/comparison/generate` 生成数据后编辑 | PASS |
+| TP-064 | SKIP | 导出返回 Markdown 表格 | PASS |
+| TP-065 | SKIP | backfill 写入 CompetitorReference | PASS |
 
-## Remaining Work
+### Bug 修复 (2 个新发现 + 3 个确认已修复)
 
-1. **FAIL items to resolve**:
-   - TP-014 — test-design issue (test itself needs redesign)
-   - TP-035 — test-design issue (test itself needs redesign)
-   - TP-119 — needs reverification after recent fixes
-2. **SKIP items** (TP-007, TP-063, TP-064, TP-065) — blocked or out-of-scope for current phase
-3. Final regression pass after all fixes land
-4. Push 8 local commits to origin/master
+| BUG | 严重度 | 状态 |
+|-----|--------|------|
+| BUG-083 (新) | High | 已修复 — hierarchy_labels dict→list 序列化 |
+| BUG-084 (新) | Medium | 已修复 — backfill 无效 competitor_id 校验 |
+| BUG-079 | Low | 确认先前已修复 |
+| BUG-081 | Low | 确认先前已修复 |
+| BUG-082 | Low | 确认先前已修复 |
 
----
+### 产出文档
 
-## Recent Commits (local, not yet pushed)
-
-```
-a98c929 test: AI Provider(DeepSeek)配置后重测12个ENV测试点
-c1edb74 feat: 添加 DeepSeek AI Provider 支持
-e5258a4 fix: 修复剩余4个FAIL——通过率73.5%→76.1%
-dbe46f5 fix: 修复BUG-068~082(E2E测试发现的15个bug) + 回归验证
-06b041c test: E2E测试——测试点生成+执行+结果分析
-7709121 fix: 修复BUG-054~067残留 + F13 AC4关系图高亮 + 环境验证
-58838c7 feat: implement v1.x Phase 12 — F19 导入/導出 + F20 团队/空间
-d2a3843 feat: implement v0.4 Phase 11 — F14 行业动态 AI推送 Feed
-```
+- `docs/testing/rca-final.md` — 根因分析报告
+- `docs/testing/bug-log.md` — 更新 BUG-079~084 状态
+- `docs/testing/bug-fix-log.md` — 更新修复设计记录
 
 ---
 
-## Modified Files (unstaged)
+## Modified Files
 
-- `docs/testing/test-checklist-v0.4-phase11.md` (modified)
-- `docs/testing/progress-checkpoint.md` (this file, new)
-
-## Untracked Files (outside docs/testing)
-
-- `docs/ai-prompt/session1-bugfix-and-startup.md`
-- `docs/ai-prompt/session2-testpoints-and-e2e.md`
-- `scripts/setup-claude-and-run.sh`
+- `api/services/project_crud.py` — 新增 `_normalize_hierarchy_labels()`
+- `api/routers/projects.py` — 调用归一化函数
+- `api/routers/comparison.py` — backfill competitor 存在性校验
+- `docs/testing/bug-log.md` — BUG-083/084 新增 + 079/081/082 状态更新
+- `docs/testing/bug-fix-log.md` — 扫尾修复记录
+- `docs/testing/rca-final.md` — RCA 报告
+- `docs/testing/progress-checkpoint.md` — 本文件

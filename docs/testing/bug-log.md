@@ -903,7 +903,7 @@ GET /api/projects/not-a-uuid 返回 500 Internal Server Error，期望返回 422
 - **日期**: 2026-04-14
 - **严重度**: Low
 - **来源**: E2E测试 TP-090
-- **状态**: Open
+- **状态**: 已修复（先前修复，本次验证确认）
 
 ### 现象
 POST /api/import/markdown 上传简单 Markdown 文件返回 400 "未解析到任何功能项"。
@@ -948,7 +948,7 @@ POST /api/import/ai-analyze 无 Authorization header 时返回 422（body valida
 - **日期**: 2026-04-14
 - **严重度**: Low
 - **来源**: E2E测试 TP-098
-- **状态**: Open
+- **状态**: 已修复（先前修复，本次验证确认）
 
 ### 现象
 当数据库不可用时，auth 相关端点抛出未捕获异常（500），而非返回 503 "数据库不可用"。
@@ -970,7 +970,7 @@ POST /api/import/ai-analyze 无 Authorization header 时返回 422（body valida
 - **日期**: 2026-04-14
 - **严重度**: Low
 - **来源**: E2E测试 TP-115
-- **状态**: Open
+- **状态**: 已修复（先前修复，本次验证确认）
 
 ### 现象
 前端对比数据原型仍使用 `highlight: "green"/"red"/null` 字段，BUG-048 要求改用 `score` 数值字段。
@@ -983,3 +983,52 @@ POST /api/import/ai-analyze 无 Authorization header 时返回 422（body valida
 
 ### 受影响文件
 - `web/src/lib/comparison-data.ts:10-36`（使用 highlight 而非 score）
+
+---
+
+## BUG-083: hierarchy_labels dict 格式导致 GET /api/projects/ 返回 500
+
+- **日期**: 2026-04-14
+- **严重度**: High (阻塞项目列表加载)
+- **来源**: 扫尾测试中发现
+- **状态**: 已修复
+
+### 现象
+GET /api/projects/ 返回 Internal Server Error (500)。FastAPI ResponseValidationError: `hierarchy_labels` 字段应为 list，实际值为 dict `{"L1": "产品线", "L2": "模块", "L3": "功能项"}`。
+
+### 根因
+`api/services/project_crud.py:70`：`list_projects()` 直接返回 `p.hierarchy_labels`，未做类型归一化。数据库中部分项目（如通过模板创建的 `OSS Research`）的 `hierarchy_labels` 存为 JSON object 而非 JSON array。`ProjectSummary` schema 声明 `hierarchy_labels: list[str]`，Pydantic 序列化时因类型不匹配抛出 ValidationError。
+
+**推测成因**: 项目模板表 `project_templates` 中 `hierarchy_labels` 列被某些模板写入 dict 格式（如 `{"L1":"...", "L2":"..."}`），模板创建项目时直接赋值，未做格式校验。
+
+### 修复
+1. `api/services/project_crud.py`: 新增 `_normalize_hierarchy_labels()` 辅助函数，将 dict/list/None 统一转为 `list[str]`
+2. 三处返回 `hierarchy_labels` 的位置均调用该函数：`list_projects()`, `create_project()`, `get_project_detail()`
+3. 修复数据库现有不一致数据：`UPDATE projects SET hierarchy_labels = '["产品线","模块","功能项"]' WHERE jsonb_typeof(hierarchy_labels) = 'object'`
+
+### 受影响文件
+- `api/services/project_crud.py:21-28`（新增 `_normalize_hierarchy_labels`）
+- `api/services/project_crud.py:79`（list_projects 调用归一化）
+- `api/services/project_crud.py:154`（create_project 调用归一化）
+- `api/routers/projects.py:101`（get_project_detail 调用归一化）
+
+---
+
+## BUG-084: backfill 无效 competitor_id 返回 500 而非 404
+
+- **日期**: 2026-04-14
+- **严重度**: Medium
+- **来源**: 扫尾测试 TP-065 中发现
+- **状态**: 已修复
+
+### 现象
+POST /api/comparison/{id}/backfill 传入不存在于 `competitors` 表的 `competitor_id` 时，返回 500 IntegrityError（FK violation），而非友好的错误提示。
+
+### 根因
+`api/routers/comparison.py:284-306`：`backfill_comparison()` 直接 INSERT `CompetitorReference` 记录，未预先校验 `competitor_id` 是否存在于 `competitors` 表。数据库 FK 约束 `competitor_references_competitor_id_competitors_id_fk` 抛出 `psycopg2.errors.ForeignKeyViolation`，FastAPI 返回通用 500。
+
+### 修复
+在 INSERT 前添加 `db.query(Competitor).filter(Competitor.id == competitor_id_str).first()` 校验，不存在时返回 `HTTPException(404, "竞品不存在")`。
+
+### 受影响文件
+- `api/routers/comparison.py:284-288`（新增 competitor 存在性校验）

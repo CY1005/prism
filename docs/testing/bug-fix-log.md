@@ -76,3 +76,58 @@ Response: {
   "analysis_record_id": "uuid | null"
 }
 ```
+
+---
+
+## 2026-04-14 扫尾修复记录
+
+### BUG-083: hierarchy_labels dict→list 序列化失败
+
+**状态**: 已修复
+**文件**: `api/services/project_crud.py`, `api/routers/projects.py`
+
+**实现方案**: 在 service 层新增 `_normalize_hierarchy_labels()` 归一化函数，所有返回 `hierarchy_labels` 的出口统一调用。
+
+**设计决策**:
+- 选择在 service 层做归一化而非 Pydantic validator，原因：问题根源是 DB 数据格式不一致 + 模板写入未校验，在数据出口统一兜底比依赖 schema 验证更可靠
+- 同时修复了 DB 中存量的 dict 格式数据（1 行），防止其他未覆盖到的查询路径再次触发
+
+---
+
+### BUG-084: backfill 无效 competitor_id 导致 500
+
+**状态**: 已修复
+**文件**: `api/routers/comparison.py`
+
+**实现方案**: 在 `CompetitorReference` INSERT 前添加 `Competitor` 存在性校验，返回 404。
+
+**设计决策**:
+- 选择应用层校验而非依赖 DB FK 异常捕获，原因：500 IntegrityError 不提供用户友好信息，且混入了日志噪声
+- 校验成本极低（单行 PK 查询），不值得为节省一次查询而让 500 暴露给前端
+
+---
+
+### BUG-079/081/082 验证记录
+
+这三个 bug 在本次扫尾测试中确认已在先前的修复轮次中解决：
+
+| BUG | 修复证据 | 验证方式 |
+|-----|---------|---------|
+| BUG-079 | `exporter.py:274-279` 已有 fallback 逻辑，无 h1 时将整文件作为单个功能项 | E2E 测试：上传纯文本 Markdown → 200 OK，返回 `parsed_feature` |
+| BUG-081 | `auth.py:66-78,96-99` 已有 `OperationalError` try/except，返回 503 | 代码审查确认 |
+| BUG-082 | `comparison-data.ts` 已使用 `score: number` 字段（1/-1/0），无 `highlight` 字段 | 代码审查确认 |
+
+---
+
+### SKIP 测试点解除记录
+
+本次将 4 个 SKIP 测试点 + 2 个 TEST-DESIGN 测试点全部重新验证通过：
+
+| TP-ID | 之前状态 | 解除原因 | 验证结果 |
+|-------|---------|---------|---------|
+| TP-007 | SKIP (无维度写入API) | 通过 `POST /api/snapshot/save` 写入 `competitor` 维度记录 | PASS |
+| TP-063 | SKIP (无 comparison 数据) | `POST /api/comparison/generate` 可在无 AI 时生成 mock 数据 | PASS |
+| TP-064 | SKIP (无 comparison 数据) | 同上，`GET /export` 返回 Markdown 表格 | PASS |
+| TP-065 | SKIP (无 comparison 数据) | 同上，`POST /backfill` 成功写入 CompetitorReference | PASS |
+| TP-014 | FAIL (test-design) | 测试点需传 `project_id` 查询参数，补充后 PASS | PASS |
+| TP-035 | FAIL (test-design) | API 使用 `email` 而非 `user_id` 邀请成员，按实际 API 测试通过 | PASS |

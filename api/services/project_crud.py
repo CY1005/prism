@@ -18,6 +18,15 @@ from api.models.tables import (
 )
 
 
+def _normalize_hierarchy_labels(labels) -> list[str]:
+    """Normalize hierarchy_labels from dict or list to list[str]."""
+    if isinstance(labels, dict):
+        return list(labels.values())
+    if isinstance(labels, list):
+        return labels
+    return ["层级1", "层级2", "层级3"]
+
+
 def list_projects(db: Session, user_id: str | None = None) -> dict:
     """List non-deleted projects. If user_id provided, only projects user is a member of."""
     query = db.query(Project).filter(Project.deleted_at.is_(None))
@@ -67,7 +76,7 @@ def list_projects(db: Session, user_id: str | None = None) -> dict:
             "name": p.name,
             "description": p.description,
             "template_type": p.template_type,
-            "hierarchy_labels": p.hierarchy_labels or ["层级1", "层级2", "层级3"],
+            "hierarchy_labels": _normalize_hierarchy_labels(p.hierarchy_labels),
             "total_nodes": total_nodes,
             "total_files": total_files,
             "avg_completion": avg_completion,
@@ -142,7 +151,7 @@ def create_project(
         "id": str(project.id),
         "name": project.name,
         "template_type": project.template_type,
-        "hierarchy_labels": project.hierarchy_labels,
+        "hierarchy_labels": _normalize_hierarchy_labels(project.hierarchy_labels),
     }
 
 

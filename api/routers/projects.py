@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from api.db import get_db
 from api.models.tables import User
 from api.routers.auth import require_user, require_admin
+from api.services.project_crud import _normalize_hierarchy_labels
 from api.schemas.project import ProjectStats, ProjectTreeOverview
 from api.schemas.project_list import (
     ProjectListResponse,
@@ -98,7 +99,7 @@ def get_project_detail(
         "name": project.name,
         "description": project.description,
         "template_type": project.template_type,
-        "hierarchy_labels": project.hierarchy_labels,
+        "hierarchy_labels": _normalize_hierarchy_labels(project.hierarchy_labels),
         "version_mode": project.version_mode,
         "created_by": str(project.created_by),
         "created_at": project.created_at.isoformat() if project.created_at else None,

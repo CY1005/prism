@@ -5,7 +5,7 @@
 **Scope**: F14 行业动态全部5条AC + 前后端契约对齐 + 类型检查
 **Source files**:
 - Backend: `api/routers/feed.py`, `api/schemas/feed.py`, `api/services/feed_fetcher.py`, `api/models/tables.py`(FeedSource/FeedItem/FeedNodeLink)
-- Frontend: `web/src/app/projects/[projectId]/overview/page.tsx`(Feed tab), `web/src/app/projects/[projectId]/workspace.tsx`(AC5 node detail)
+- Frontend: `web/src/app/projects/[projectId]/overview/page.tsx`(Feed tab), `web/src/app/projects/[projectId]/settings/page.tsx`(订阅源管理tab), `web/src/app/projects/[projectId]/workspace.tsx`(AC5 node detail)
 - Components: `web/src/components/feed-card.tsx`
 - Server Actions: `web/src/actions/feed.ts`
 - Schema: `web/src/db/schema.ts`(feedSources/feedItems/feedNodeLinks)
@@ -95,6 +95,7 @@
 | RSS 解析 | Yes | `api/services/feed_fetcher.py:15-34` — feedparser.parse()，提取 title/link/published/summary |
 | 定时抓取 | Yes | `api/main.py:38-48` — APScheduler AsyncIOScheduler, interval=6h, id="feed_fetch" |
 | 手动触发 | Yes | `api/routers/feed.py:259-297` — POST /fetch?project_id= |
+| Settings 页订阅源管理 | Yes | `settings/page.tsx:649-746` — "订阅源" tab，完整 CRUD（添加/启停/删除），调用 Server Action |
 
 ---
 

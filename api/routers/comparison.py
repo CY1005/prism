@@ -281,6 +281,11 @@ def backfill_comparison(
     cell = cells.get(competitor_id_str, {})
     cell_value = cell.get("value", "") if isinstance(cell, dict) else str(cell)
 
+    # Validate competitor exists
+    competitor = db.query(Competitor).filter(Competitor.id == competitor_id_str).first()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="竞品不存在")
+
     # Find or create CompetitorReference
     comp_ref = db.query(CompetitorReference).filter(
         CompetitorReference.node_id == node_id_str,
