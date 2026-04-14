@@ -128,6 +128,38 @@ export async function aiAnalyzeZip(
   }
 }
 
+// ─── AI Adjust Mapping ───────────────────────────────────────────────────────
+
+export interface MappingAdjustment {
+  id: string;
+  recommended_module_id: string;
+  recommended_dimension_id: number | null;
+}
+
+export async function aiAdjustMapping(
+  projectId: string,
+  sessionId: string,
+  adjustments: MappingAdjustment[],
+): Promise<void> {
+  // Fire-and-forget: persist mapping adjustments; errors are non-blocking
+  try {
+    const user = await requireAuth();
+    await checkProjectAccess(user.id, projectId, "editor");
+
+    await fetch(`${API_BASE}/api/import/ai-mapping`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        project_id: projectId,
+        adjustments,
+      }),
+    });
+  } catch {
+    // Non-blocking; local state is the source of truth
+  }
+}
+
 // ─── AI Confirm Import ───────────────────────────────────────────────────────
 
 export async function aiConfirmImport(

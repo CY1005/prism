@@ -48,6 +48,7 @@ export interface RelationGraphProps {
   moduleEdges: ModuleEdge[]
   filters: Record<string, boolean>
   onExpandModule?: (moduleId: string) => Promise<{ features: FeatureNode[]; relations: FeatureRelation[] }>
+  affectedNodeIds?: string[]
 }
 
 function completionToColor(percent: number): string {
@@ -93,6 +94,7 @@ export function RelationGraph({
   moduleEdges: modEdges,
   filters,
   onExpandModule,
+  affectedNodeIds = [],
 }: RelationGraphProps) {
   const router = useRouter()
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -103,23 +105,29 @@ export function RelationGraph({
   // Build React Flow nodes for modules
   const positions = useMemo(() => computeCircularLayout(modules.map((m) => m.id)), [modules])
 
+  const affectedSet = useMemo(() => new Set(affectedNodeIds), [affectedNodeIds])
+
   const rfNodes: Node[] = useMemo(() => {
-    const nodes: Node[] = modules.map((mod) => ({
-      id: mod.id,
-      position: positions[mod.id] ?? { x: 0, y: 0 },
-      data: { label: mod.name },
-      style: {
-        background: completionToColor(mod.completionPercent),
-        border: `2px solid ${completionToBorder(mod.completionPercent)}`,
-        borderRadius: 8,
-        padding: "8px 14px",
-        fontSize: 13,
-        fontWeight: 600,
-        whiteSpace: "nowrap" as const,
-        opacity: selectedNodeId && selectedNodeId !== mod.id ? 0.3 : 1,
-        cursor: "pointer",
-      },
-    }))
+    const nodes: Node[] = modules.map((mod) => {
+      const isAffected = affectedSet.has(mod.id)
+      return {
+        id: mod.id,
+        position: positions[mod.id] ?? { x: 0, y: 0 },
+        data: { label: mod.name },
+        style: {
+          background: completionToColor(mod.completionPercent),
+          border: isAffected ? "2px solid #fb923c" : `2px solid ${completionToBorder(mod.completionPercent)}`,
+          borderRadius: 8,
+          padding: "8px 14px",
+          fontSize: 13,
+          fontWeight: 600,
+          whiteSpace: "nowrap" as const,
+          opacity: selectedNodeId && selectedNodeId !== mod.id ? 0.3 : 1,
+          cursor: "pointer",
+          boxShadow: isAffected ? "0 0 0 2px #fb923c, 0 0 8px 2px rgba(251,146,60,0.4)" : undefined,
+        },
+      }
+    })
 
     // Add expanded feature nodes around the expanded module
     if (expandedModuleId && expandedFeatures.length > 0) {
@@ -128,6 +136,7 @@ export function RelationGraph({
         const featureRadius = 120
         expandedFeatures.forEach((feat, i) => {
           const angle = (2 * Math.PI * i) / expandedFeatures.length
+          const isAffected = affectedSet.has(feat.id)
           nodes.push({
             id: feat.id,
             position: {
@@ -137,7 +146,7 @@ export function RelationGraph({
             data: { label: feat.name },
             style: {
               background: completionToColor(feat.completionPercent),
-              border: `1px solid ${completionToBorder(feat.completionPercent)}`,
+              border: isAffected ? "2px solid #fb923c" : `1px solid ${completionToBorder(feat.completionPercent)}`,
               borderRadius: 6,
               padding: "4px 10px",
               fontSize: 11,
@@ -145,6 +154,7 @@ export function RelationGraph({
               whiteSpace: "nowrap" as const,
               opacity: selectedNodeId && selectedNodeId !== feat.id ? 0.3 : 1,
               cursor: "pointer",
+              boxShadow: isAffected ? "0 0 0 2px #fb923c, 0 0 8px 2px rgba(251,146,60,0.4)" : undefined,
             },
           })
         })
@@ -152,7 +162,7 @@ export function RelationGraph({
     }
 
     return nodes
-  }, [modules, positions, selectedNodeId, expandedModuleId, expandedFeatures])
+  }, [modules, positions, selectedNodeId, expandedModuleId, expandedFeatures, affectedSet])
 
   // Build React Flow edges
   const rfEdges: Edge[] = useMemo(() => {

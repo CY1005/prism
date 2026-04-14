@@ -37,6 +37,7 @@ from api.schemas.analyze import (
     SaveAnalysisResponse,
     SaveTestPointsRequest,
     SaveTestPointsResponse,
+    AffectedNodesResponse,
 )
 from api.schemas.test_points import TestPointsRequest, TestPointsResponse
 from api.services.ai_provider import get_provider
@@ -277,7 +278,11 @@ async def analyze_requirement_stream(
 
 @router.post("/analyze/save", response_model=SaveAnalysisResponse)
 def save_analysis(req: SaveAnalysisRequest, db: Session = Depends(get_db)):
-    """Save analysis result as a dimension record on the node."""
+    """Save analysis result as a dimension record on the node.
+
+    F13 AC4: affected_node_ids are stored in content.metadata so that
+    relation-graph can highlight affected nodes via GET /analyze/affected-nodes.
+    """
     _get_project(db, req.project_id)
     _get_node(db, req.node_id)
 
@@ -295,6 +300,10 @@ def save_analysis(req: SaveAnalysisRequest, db: Session = Depends(get_db)):
         db.add(dim_type)
         db.flush()
 
+    meta = req.metadata or {}
+    if req.affected_node_ids is not None:
+        meta["affected_node_ids"] = req.affected_node_ids
+
     record_id = uuid.uuid4()
     record = DimensionRecord(
         id=record_id,
@@ -302,7 +311,7 @@ def save_analysis(req: SaveAnalysisRequest, db: Session = Depends(get_db)):
         dimension_type_id=dim_type.id,
         content={
             "analysis_result": req.analysis_result,
-            "metadata": req.metadata or {},
+            "metadata": meta,
         },
     )
     db.add(record)
@@ -311,6 +320,46 @@ def save_analysis(req: SaveAnalysisRequest, db: Session = Depends(get_db)):
     return SaveAnalysisResponse(
         dimension_record_id=record_id,
         message="分析结果已保存",
+    )
+
+
+@router.get("/analyze/affected-nodes", response_model=AffectedNodesResponse)
+def get_affected_nodes(
+    node_id: str,
+    project_id: str,
+    db: Session = Depends(get_db),
+):
+    """F13 AC4: Return affected_node_ids from the most recent analysis of this node.
+
+    relation-graph page calls this to highlight nodes impacted by the latest
+    requirement analysis. Returns empty list if no analysis has been saved.
+    """
+    dim_type = db.query(DimensionType).filter(
+        DimensionType.key == "requirement_analysis"
+    ).first()
+    if not dim_type:
+        return AffectedNodesResponse(node_id=node_id, affected_node_ids=[])
+
+    record = (
+        db.query(DimensionRecord)
+        .filter(
+            DimensionRecord.node_id == node_id,
+            DimensionRecord.dimension_type_id == dim_type.id,
+        )
+        .order_by(DimensionRecord.created_at.desc())
+        .first()
+    )
+    if not record:
+        return AffectedNodesResponse(node_id=node_id, affected_node_ids=[])
+
+    content = record.content or {}
+    meta = content.get("metadata", {}) if isinstance(content, dict) else {}
+    affected = meta.get("affected_node_ids", []) if isinstance(meta, dict) else []
+
+    return AffectedNodesResponse(
+        node_id=node_id,
+        affected_node_ids=affected,
+        analysis_record_id=record.id,
     )
 
 

@@ -302,6 +302,42 @@ async def vector_search(
     return results[:limit]
 
 
+def _backfill_issue_breadcrumbs(db, results: list[dict]) -> None:
+    """BUG-063: Fill in breadcrumb for issue results that have breadcrumb=None.
+
+    vector_search() returns issues with breadcrumb=None because raw SQL doesn't
+    join ancestor nodes. This function uses the ORM Session to query and backfill.
+    Only processes entries where type=='issue', breadcrumb is None, and node_id exists.
+    """
+    from api.services.search import _build_breadcrumb
+    from api.models.tables import Node, Project
+
+    # Collect node_ids that need breadcrumb lookup
+    node_ids_needed = [
+        r["node_id"]
+        for r in results
+        if r.get("type") == "issue" and r.get("breadcrumb") is None and r.get("node_id")
+    ]
+    if not node_ids_needed:
+        return
+
+    # Batch query nodes + their projects
+    rows = (
+        db.query(Node, Project)
+        .join(Project, Node.project_id == Project.id)
+        .filter(Node.id.in_(node_ids_needed))
+        .all()
+    )
+    node_map = {str(node.id): (node, project.name) for node, project in rows}
+
+    for r in results:
+        if r.get("type") == "issue" and r.get("breadcrumb") is None and r.get("node_id"):
+            entry = node_map.get(r["node_id"])
+            if entry:
+                node, project_name = entry
+                r["breadcrumb"] = _build_breadcrumb(db, node, project_name)
+
+
 async def hybrid_search(
     db,
     db_engine,
@@ -382,6 +418,9 @@ async def hybrid_search(
 
     # RRF fusion
     merged = rrf_merge(keyword_results, semantic_results)[:limit]
+
+    # BUG-063: backfill breadcrumb for semantic-only issue results (breadcrumb=None)
+    _backfill_issue_breadcrumbs(db, merged)
 
     return {
         "query": query,

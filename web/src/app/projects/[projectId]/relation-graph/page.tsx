@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { RelationGraph } from "@/components/relation-graph";
 import { getRelationGraph, getModuleRelationDetail } from "@/actions/relations";
+import { getAffectedNodes } from "@/actions/analyze";
 
 type RelationType = "depends_on" | "related_to" | "conflicts_with";
 
@@ -23,7 +24,9 @@ const relationTypeConfig: Record<
 
 export default function RelationGraphPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const projectId = params.projectId as string;
+  const nodeId = searchParams.get("nodeId") ?? null;
 
   const [graphData, setGraphData] = useState<{
     nodes: { id: string; name: string; featureCount: number; completionPercent: number }[];
@@ -36,6 +39,7 @@ export default function RelationGraphPage() {
     related_to: true,
     conflicts_with: true,
   });
+  const [affectedNodeIds, setAffectedNodeIds] = useState<string[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -48,6 +52,16 @@ export default function RelationGraphPage() {
       }
     });
   }, [projectId]);
+
+  useEffect(() => {
+    if (!nodeId) return;
+    getAffectedNodes(nodeId, projectId).then((result) => {
+      if (result.success) {
+        setAffectedNodeIds(result.data.affected_node_ids);
+      }
+      // Non-blocking: failure silently skips highlighting
+    });
+  }, [nodeId, projectId]);
 
   const toggleFilter = (type: string) => {
     setFilters((prev) => ({ ...prev, [type]: !prev[type] }));
@@ -192,6 +206,7 @@ export default function RelationGraphPage() {
         moduleEdges={graphData.edges}
         filters={filters}
         onExpandModule={handleExpandModule}
+        affectedNodeIds={affectedNodeIds}
       />
     </div>
   );

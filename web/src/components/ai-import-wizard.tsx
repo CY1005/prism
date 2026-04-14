@@ -31,7 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { AIMappingTable, type AIMappingRow, type Confidence } from "@/components/ai-mapping-table";
 import { type ParsedFile, type FileTreeNode } from "@/actions/import";
-import { aiAnalyzeZip, aiConfirmImport, aiUndoImport, type MappingRow, type AIConfirmResult as SAConfirmResult } from "@/actions/import-ai";
+import { aiAnalyzeZip, aiAdjustMapping, aiConfirmImport, aiUndoImport, type MappingRow, type AIConfirmResult as SAConfirmResult } from "@/actions/import-ai";
 
 // ─── Types ───────────────────────────────────────────
 
@@ -281,8 +281,8 @@ function formatBadgeColor(format: string) {
 // ─── Confidence conversion (backend int 0-100 → frontend enum) ──
 
 function toConfidence(n: number): Confidence {
-  if (n >= 70) return "high";
-  if (n >= 40) return "medium";
+  if (n >= 85) return "high";
+  if (n >= 60) return "medium";
   return "low";
 }
 
@@ -460,15 +460,7 @@ export function AIImportWizard({
       }));
 
     if (adjustments.length > 0 && analyzeSessionId) {
-      fetch("/api/import/ai-mapping", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session_id: analyzeSessionId,
-          project_id: projectId,
-          adjustments,
-        }),
-      }).catch(() => {
+      aiAdjustMapping(projectId, analyzeSessionId, adjustments).catch(() => {
         // Non-blocking; local state is the source of truth
       });
     }

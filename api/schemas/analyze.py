@@ -51,6 +51,13 @@ class SaveAnalysisRequest(BaseModel):
     node_id: UUID
     analysis_result: str
     metadata: dict | None = None
+    affected_node_ids: list[str] | None = None  # F13 AC4: node IDs affected by the analysis
+
+
+class AffectedNodesResponse(BaseModel):
+    node_id: str
+    affected_node_ids: list[str]
+    analysis_record_id: UUID | None = None
 
 
 class SaveAnalysisResponse(BaseModel):
