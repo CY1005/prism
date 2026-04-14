@@ -4,7 +4,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from api.db import get_db, engine
-from api.models.tables import KnowledgeItem, Node
+from api.models.tables import KnowledgeItem, Node, User
+from api.routers.auth import require_user
 from api.schemas.search import SearchResponse
 from api.services.search import unified_search
 from api.services.hybrid_search import hybrid_search
@@ -129,8 +130,8 @@ async def search_unified(
     project_id: str | None = None,
     dimension_type: str | None = None,
     issue_category: str | None = None,
-    user_id: str = Query(..., description="User ID for permission check"),
     limit: int = Query(20, ge=1, le=200),
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """F18: Hybrid search (BM25 + pgvector semantic + RRF fusion).
@@ -143,7 +144,7 @@ async def search_unified(
         db=db,
         db_engine=engine,
         query=q,
-        user_id=user_id,
+        user_id=str(user.id),
         project_id=project_id,
         dimension_type=dimension_type,
         issue_category=issue_category,

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from typing import Any
 
 from api.db import get_db
+from api.models.tables import User
+from api.routers.auth import require_user
 from api.services.import_handler import extract_and_parse_zip
 from api.services.ai_import import analyze_zip_files, confirm_ai_import, undo_ai_import
 from api.services.exporter import parse_markdown_content
@@ -63,6 +65,7 @@ class AIAnalyzeRequest(BaseModel):
 @router.post("/ai-analyze")
 async def ai_analyze(
     req: AIAnalyzeRequest,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """AI分析上传的文件，返回映射表.
@@ -156,6 +159,7 @@ class AIConfirmRequest(BaseModel):
 @router.post("/ai-confirm")
 def ai_confirm(
     req: AIConfirmRequest,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """确认导入：批量创建功能项+维度记录+关联关系.
@@ -199,6 +203,7 @@ class UndoRequest(BaseModel):
 @router.post("/undo")
 def undo_import(
     req: UndoRequest,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """一键撤销本次AI导入（批量删除本次创建的记录）.

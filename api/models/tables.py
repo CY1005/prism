@@ -246,8 +246,11 @@ class Issue(Base):
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     node_id = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="SET NULL"))
     category = Column(Text, nullable=False)  # 'bug' | 'tech_debt' | 'design_flaw' | 'performance'
+    title = Column(Text, nullable=False)
     description = Column(Text, nullable=False)
-    tags = Column(JSONB, default=[])
+    severity = Column(Text, nullable=False, default="medium")
+    status = Column(Text, nullable=False, default="open")
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 

@@ -165,10 +165,11 @@ async def vector_search(
                 JOIN nodes n ON e.target_id = n.id
                 JOIN projects p ON n.project_id = p.id
                 WHERE {node_where}
+                AND (1 - (e.embedding <=> %s::vector)) > 0.3
                 ORDER BY e.embedding <=> %s::vector
                 LIMIT %s
             """
-            node_full_params = tuple([vec_str] + node_params + [vec_str, limit])
+            node_full_params = tuple([vec_str] + node_params + [vec_str, vec_str, limit])
 
             for row in conn.exec_driver_sql(node_sql, node_full_params).fetchall():
                 results.append({
@@ -214,10 +215,11 @@ async def vector_search(
                 JOIN projects p ON n.project_id = p.id
                 JOIN dimension_types dt ON dr.dimension_type_id = dt.id
                 WHERE {dim_where}
+                AND (1 - (e.embedding <=> %s::vector)) > 0.3
                 ORDER BY e.embedding <=> %s::vector
                 LIMIT %s
             """
-            dim_full_params = tuple([vec_str] + dim_params + [vec_str, limit])
+            dim_full_params = tuple([vec_str] + dim_params + [vec_str, vec_str, limit])
 
             for row in conn.exec_driver_sql(dim_sql, dim_full_params).fetchall():
                 content = row[7]
@@ -268,10 +270,11 @@ async def vector_search(
                     JOIN issues i ON e.target_id = i.id
                     JOIN projects p ON i.project_id = p.id
                     WHERE {issue_where}
+                    AND (1 - (e.embedding <=> %s::vector)) > 0.3
                     ORDER BY e.embedding <=> %s::vector
                     LIMIT %s
                 """
-                issue_full_params = tuple([vec_str] + issue_params + [vec_str, limit])
+                issue_full_params = tuple([vec_str] + issue_params + [vec_str, vec_str, limit])
 
                 for row in conn.exec_driver_sql(issue_sql, issue_full_params).fetchall():
                     desc = row[1] or ""

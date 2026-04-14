@@ -19,6 +19,7 @@ class ProjectSettingsResponse(BaseModel):
     name: str
     description: str | None = None
     template_type: str
+    hierarchy_labels: dict | list | None = None
     members: list[MemberInfo] = []
     dimension_configs: list[DimensionConfigInfo] = []
 
@@ -26,3 +27,4 @@ class ProjectSettingsResponse(BaseModel):
 class ProjectSettingsUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    hierarchy_labels: dict | list | None = None

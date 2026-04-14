@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Header
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from api.db import get_db
@@ -62,13 +63,19 @@ def require_admin(user: User = Depends(require_user)) -> User:
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     """Login with email + password. Returns access + refresh tokens (AC1, AC2, AC5, AC6, AC10)."""
-    user, error = authenticate_user(db, req.email, req.password)
+    try:
+        user, error = authenticate_user(db, req.email, req.password)
+    except OperationalError as e:
+        raise HTTPException(status_code=503, detail=f"数据库不可用: {e}")
     if error:
         status = 403 if "禁用" in error else 401
         raise HTTPException(status_code=status, detail=error)
 
-    access_token = create_access_token(str(user.id), user.email, user.role)
-    refresh_token = create_refresh_token(db, str(user.id))
+    try:
+        access_token = create_access_token(str(user.id), user.email, user.role)
+        refresh_token = create_refresh_token(db, str(user.id))
+    except OperationalError as e:
+        raise HTTPException(status_code=503, detail=f"数据库不可用: {e}")
 
     return TokenResponse(
         access_token=access_token,
@@ -86,7 +93,10 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/refresh", response_model=RefreshResponse)
 def refresh(req: RefreshRequest, db: Session = Depends(get_db)):
     """Refresh access token using refresh token (AC7, AC8)."""
-    new_access, user, error = refresh_access_token(db, req.refresh_token)
+    try:
+        new_access, user, error = refresh_access_token(db, req.refresh_token)
+    except OperationalError as e:
+        raise HTTPException(status_code=503, detail=f"数据库不可用: {e}")
     if error:
         status = 403 if "禁用" in error else 401
         raise HTTPException(status_code=status, detail=error)

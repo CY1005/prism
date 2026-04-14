@@ -271,4 +271,11 @@ def parse_markdown_content(md_content: str) -> list[dict]:
     if current_feature:
         features.append(current_feature)
 
+    # Fallback: if no h1 headings found, treat entire file as a single feature item
+    if not features and md_content.strip():
+        features.append({
+            "name": "导入内容",
+            "dimensions": [{"name": "description", "content": md_content.strip()}],
+        })
+
     return features

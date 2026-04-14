@@ -16,7 +16,9 @@ from api.models.tables import (
 
 def get_project_stats(db: Session, project_id: str) -> dict | None:
     try:
-        project = db.query(Project).filter(Project.id == project_id).first()
+        project = db.query(Project).filter(
+            Project.id == project_id, Project.deleted_at.is_(None)
+        ).first()
     except Exception:
         return None
     if not project:
@@ -69,7 +71,9 @@ def get_project_stats(db: Session, project_id: str) -> dict | None:
 
 def get_project_tree_overview(db: Session, project_id: str) -> dict | None:
     try:
-        project = db.query(Project).filter(Project.id == project_id).first()
+        project = db.query(Project).filter(
+            Project.id == project_id, Project.deleted_at.is_(None)
+        ).first()
     except Exception:
         return None
     if not project:

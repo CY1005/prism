@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import health, search, analyze, projects, auth, settings, comparison, snapshot, feed, export
+from api.routers import health, search, analyze, projects, auth, settings, comparison, snapshot, feed, export, nodes, issues
 from api.routers import import_ as import_router
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,8 @@ app.include_router(comparison.router, prefix="/api/comparison", tags=["compariso
 app.include_router(snapshot.router, prefix="/api/snapshot", tags=["snapshot"])
 app.include_router(feed.router, prefix="/api/feed", tags=["feed"])
 app.include_router(export.router, prefix="/api/export", tags=["export"])
+app.include_router(nodes.router, prefix="/api/projects", tags=["nodes"])
+app.include_router(issues.router, prefix="/api/projects", tags=["issues"])
 
 if __name__ == "__main__":
     import uvicorn
