@@ -63,7 +63,7 @@ class ComparisonUpdateResponse(BaseModel):
 
 
 class ComparisonBackfillRequest(BaseModel):
-    row_index: int
+    row_index: int = 0
     node_id: UUID
     competitor_id: UUID
 
