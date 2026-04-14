@@ -295,3 +295,50 @@ class CompetitorReference(Base):
     pros_and_cons = Column(JSONB)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Feed Sources (F14 行业动态) ────────────────────
+
+class FeedSource(Base):
+    __tablename__ = "feed_sources"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    source_type = Column(Text, nullable=False)  # 'rss' | 'search'
+    url = Column(Text, nullable=False)
+    name = Column(Text, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Feed Items (F14 行业动态) ──────────────────────
+
+class FeedItem(Base):
+    __tablename__ = "feed_items"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    source_id = Column(UUID(as_uuid=True), ForeignKey("feed_sources.id", ondelete="SET NULL"))
+    title = Column(Text, nullable=False)
+    source = Column(Text, nullable=False)
+    published_date = Column(DateTime, nullable=False)
+    summary = Column(Text, nullable=False)
+    tags = Column(JSONB, default=[])
+    suggested_node_id = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="SET NULL"))
+    confidence = Column(Float, nullable=False, default=0)
+    status = Column(Text, nullable=False, default="pending")
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Feed Node Links (F14 行业动态) ────────────────
+
+class FeedNodeLink(Base):
+    __tablename__ = "feed_node_links"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    feed_item_id = Column(UUID(as_uuid=True), ForeignKey("feed_items.id", ondelete="CASCADE"), nullable=False)
+    node_id = Column(UUID(as_uuid=True), ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())

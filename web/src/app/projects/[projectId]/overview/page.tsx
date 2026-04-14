@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useEffect } from "react"
-import { Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate, Clock } from "lucide-react"
+import { Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate, Clock, Bot, Rss, Eye, EyeOff, Trash2, X } from "lucide-react"
 import { ImportCSVModal } from "@/components/import-csv-modal"
 import { GlobalSearchBar } from "@/components/global-search-bar"
 import { TreemapView } from "@/components/treemap-view"
@@ -27,7 +27,25 @@ import { openclawStrings, openclawRecentUpdates } from "@/lib/openclaw-data"
 import { getProjectStats, getProjectTreeOverview, type ProjectStats, type TreeNodeOverview } from "@/services/project-stats"
 import { getPanoramaData, getProjectStats as getPanoramaStats } from "@/actions/panorama"
 import { getActivityLogs } from "@/actions/activity-log"
+import {
+  getFeedItems,
+  getFeedSources,
+  confirmFeedItem,
+  ignoreFeedItem,
+  createFeedSource,
+  updateFeedSource,
+  deleteFeedSource,
+} from "@/actions/feed"
+import { FeedList, type FeedItemData } from "@/components/feed-card"
 import { useProjectRole } from "@/contexts/project-role-context"
+import { Input as FormInput } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 function getStatusColor(percent: number) {
   if (percent >= 80) return "bg-green-500"
@@ -80,6 +98,79 @@ export default function ProjectOverviewPage() {
   }[]>([])
   const [activityPage, setActivityPage] = useState(1)
   const [activityLoading, setActivityLoading] = useState(false)
+
+  // F14: Feed state
+  const [showFeed, setShowFeed] = useState(false)
+  const [feedItemsList, setFeedItemsList] = useState<FeedItemData[]>([])
+  const [feedSourcesList, setFeedSourcesList] = useState<{
+    id: string; name: string; url: string; sourceType: string; isActive: boolean; createdAt: Date;
+  }[]>([])
+  const [feedLoading, setFeedLoading] = useState(false)
+  const [feedStatusFilter, setFeedStatusFilter] = useState<string>("all")
+  const [showFeedSources, setShowFeedSources] = useState(false)
+  const [newSourceName, setNewSourceName] = useState("")
+  const [newSourceUrl, setNewSourceUrl] = useState("")
+  const [newSourceType, setNewSourceType] = useState("rss")
+
+  const loadFeedData = async (statusFilter: string) => {
+    setFeedLoading(true)
+    try {
+      const statuses = statusFilter === "all" ? ["pending", "confirmed", "ignored"] : [statusFilter]
+      const allItems: FeedItemData[] = []
+      for (const s of statuses) {
+        const items = await getFeedItems(projectId, s)
+        allItems.push(...(items as FeedItemData[]))
+      }
+      setFeedItemsList(allItems)
+      const sources = await getFeedSources(projectId)
+      setFeedSourcesList(sources as typeof feedSourcesList)
+    } catch {
+      // ignore
+    } finally {
+      setFeedLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (showFeed) {
+      loadFeedData(feedStatusFilter)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFeed, feedStatusFilter])
+
+  const handleConfirmFeed = async (itemId: string, nodeId: string) => {
+    await confirmFeedItem(itemId, nodeId)
+    loadFeedData(feedStatusFilter)
+  }
+
+  const handleIgnoreFeed = async (itemId: string) => {
+    await ignoreFeedItem(itemId)
+    loadFeedData(feedStatusFilter)
+  }
+
+  const handleAddSource = async () => {
+    if (!newSourceName.trim() || !newSourceUrl.trim()) return
+    await createFeedSource(projectId, {
+      name: newSourceName.trim(),
+      url: newSourceUrl.trim(),
+      sourceType: newSourceType,
+    })
+    setNewSourceName("")
+    setNewSourceUrl("")
+    loadFeedData(feedStatusFilter)
+  }
+
+  const handleToggleSource = async (sourceId: string, isActive: boolean) => {
+    await updateFeedSource(sourceId, { isActive })
+    loadFeedData(feedStatusFilter)
+  }
+
+  const handleDeleteSource = async (sourceId: string) => {
+    await deleteFeedSource(sourceId)
+    loadFeedData(feedStatusFilter)
+  }
+
+  const feedPendingCount = feedItemsList.filter((i) => i.status === "pending").length
 
   useEffect(() => {
     setStatsLoading(true)
@@ -223,7 +314,17 @@ export default function ProjectOverviewPage() {
           关系图
         </Link>
         <button
-          onClick={() => setShowActivityLog(!showActivityLog)}
+          onClick={() => { setShowFeed(!showFeed); if (showActivityLog) setShowActivityLog(false) }}
+          className={`pb-3 pt-2 text-sm ${
+            showFeed
+              ? "border-b-2 border-primary text-primary font-medium"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          行业动态
+        </button>
+        <button
+          onClick={() => { setShowActivityLog(!showActivityLog); if (showFeed) setShowFeed(false) }}
           className={`pb-3 pt-2 text-sm ${
             showActivityLog
               ? "border-b-2 border-primary text-primary font-medium"
@@ -486,6 +587,129 @@ export default function ProjectOverviewPage() {
           </div>
         </Card>
       </div>
+
+      {/* F14: Feed Panel */}
+      {showFeed && (
+        <div className="px-6 pb-6">
+          {/* AI Auto-search Indicator */}
+          <div className="flex items-center justify-between py-3 px-4 bg-muted/30 rounded-t-lg border border-border border-b-0">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Bot className="h-4 w-4 text-primary" />
+              <span>AI 基于项目知识库自动搜索</span>
+              {feedPendingCount > 0 && (
+                <Badge variant="secondary" className="ml-2">{feedPendingCount} 条待确认</Badge>
+              )}
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowFeedSources(!showFeedSources)}>
+              <Rss className="h-3.5 w-3.5" />
+              {showFeedSources ? "隐藏订阅源" : "管理订阅源"}
+            </Button>
+          </div>
+
+          {/* RSS Sources Panel */}
+          {showFeedSources && (
+            <div className="px-4 py-4 border border-border border-b-0 bg-card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium">RSS 订阅源</h3>
+              </div>
+              <div className="space-y-2 mb-4">
+                {feedSourcesList.map((source) => (
+                  <div key={source.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-2 w-2 rounded-full ${source.isActive ? "bg-green-500" : "bg-gray-300"}`} />
+                      <span className="text-sm font-medium">{source.name}</span>
+                      <span className="text-xs text-muted-foreground">{source.url}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="text-xs">{source.sourceType}</Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleToggleSource(source.id, !source.isActive)}
+                      >
+                        {source.isActive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteSource(source.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {feedSourcesList.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">暂无订阅源</p>
+                )}
+              </div>
+              <Separator className="mb-3" />
+              <div className="flex items-center gap-2">
+                <FormInput
+                  placeholder="名称"
+                  value={newSourceName}
+                  onChange={(e) => setNewSourceName(e.target.value)}
+                  className="w-32"
+                />
+                <FormInput
+                  placeholder="URL"
+                  value={newSourceUrl}
+                  onChange={(e) => setNewSourceUrl(e.target.value)}
+                  className="flex-1"
+                />
+                <Select value={newSourceType} onValueChange={(v) => v && setNewSourceType(v)}>
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="rss">RSS</SelectItem>
+                    <SelectItem value="search">搜索</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="default" size="sm" onClick={handleAddSource} disabled={!newSourceName.trim() || !newSourceUrl.trim()}>
+                  添加
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Filter + Feed List */}
+          <Card className="border-border/60 p-6 shadow-sm rounded-t-none border-t-0">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold">行业动态 Feed</h2>
+                <Badge variant="secondary">{feedItemsList.length} 条</Badge>
+              </div>
+              <Select value={feedStatusFilter} onValueChange={(v) => v && setFeedStatusFilter(v)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部状态</SelectItem>
+                  <SelectItem value="pending">待确认</SelectItem>
+                  <SelectItem value="confirmed">已关联</SelectItem>
+                  <SelectItem value="ignored">已忽略</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {feedLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                加载动态中...
+              </div>
+            ) : (
+              <FeedList
+                items={feedItemsList}
+                onConfirm={handleConfirmFeed}
+                onIgnore={handleIgnoreFeed}
+              />
+            )}
+          </Card>
+        </div>
+      )}
 
       {/* F15: Activity Log Panel */}
       {showActivityLog && (

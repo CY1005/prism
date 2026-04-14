@@ -73,6 +73,8 @@ import {
   getReferencesByNode,
 } from "@/actions/competitor-references";
 import { createRelation } from "@/actions/relations";
+import { getFeedItemsByNode } from "@/actions/feed";
+import { FeedList, type FeedItemData } from "@/components/feed-card";
 import {
   CompetitorReferenceList,
   AddReferenceDialog,
@@ -297,6 +299,9 @@ export function ProjectWorkspace({
   const [addRefDialog, setAddRefDialog] = useState(false);
   const [editingRef, setEditingRef] = useState<CompetitorReference | null>(null);
 
+  // F14: Feed items linked to this node
+  const [nodeFeedItems, setNodeFeedItems] = useState<FeedItemData[]>([]);
+
   // F8: Relation states
   const [addRelationDialog, setAddRelationDialog] = useState(false);
   const [relationTargetId, setRelationTargetId] = useState("");
@@ -409,20 +414,23 @@ export function ProjectWorkspace({
     startTransition(async () => {
       if (type === "file") {
         setFolderChildren(null);
-        const [data, issues, refs, comps] = await Promise.all([
+        const [data, issues, refs, comps, feedLinked] = await Promise.all([
           getNodeWithDimensions(id),
           getIssuesByNode(project.id, id),
           getReferencesByNode(project.id, id),
           getCompetitorsByProject(project.id),
+          getFeedItemsByNode(project.id, id),
         ]);
         setNodeData(data);
         setNodeIssues(issues as Issue[]);
         setNodeRefs(refs as CompetitorReference[]);
         setProjectCompetitors(comps as Competitor[]);
+        setNodeFeedItems(feedLinked as FeedItemData[]);
       } else {
         setNodeData(null);
         setNodeIssues([]);
         setNodeRefs([]);
+        setNodeFeedItems([]);
         const children = await getFolderOverview(id, project.id);
         setFolderChildren(children);
       }
@@ -942,6 +950,14 @@ export function ProjectWorkspace({
                   onSubmit={handleAddRef}
                   editingRef={editingRef}
                 />
+
+                {/* F14: Related Feed Items */}
+                {nodeFeedItems.length > 0 && (
+                  <Card className="border-border/60 shadow-sm p-5">
+                    <h3 className="text-sm font-medium mb-3">相关动态</h3>
+                    <FeedList items={nodeFeedItems} compact />
+                  </Card>
+                )}
 
                 {/* Version Timeline */}
                 <VersionTimeline

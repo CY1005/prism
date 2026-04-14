@@ -319,3 +319,53 @@ export const knowledgeItems = pgTable("knowledge_items", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// ─── Feed Sources (F14 行业动态) ──────────────────────
+
+export const feedSources = pgTable("feed_sources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  sourceType: text("source_type").notNull(), // 'rss' | 'search'
+  url: text("url").notNull(),
+  name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─── Feed Items (F14 行业动态) ────────────────────────
+
+export const feedItems = pgTable("feed_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  sourceId: uuid("source_id").references(() => feedSources.id, {
+    onDelete: "set null",
+  }),
+  title: text("title").notNull(),
+  source: text("source").notNull(), // display name like "AWS Blog"
+  publishedDate: timestamp("published_date").notNull(),
+  summary: text("summary").notNull(),
+  tags: jsonb("tags").$type<string[]>().default([]),
+  suggestedNodeId: uuid("suggested_node_id").references(() => nodes.id, {
+    onDelete: "set null",
+  }),
+  confidence: real("confidence").notNull().default(0),
+  status: text("status").notNull().default("pending"), // 'pending' | 'confirmed' | 'ignored'
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ─── Feed Node Links (F14 行业动态) ──────────────────
+
+export const feedNodeLinks = pgTable("feed_node_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  feedItemId: uuid("feed_item_id")
+    .notNull()
+    .references(() => feedItems.id, { onDelete: "cascade" }),
+  nodeId: uuid("node_id")
+    .notNull()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

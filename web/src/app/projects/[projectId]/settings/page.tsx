@@ -59,11 +59,18 @@ import {
   deleteCompetitor,
 } from "@/actions/competitors"
 import {
+  getFeedSources,
+  createFeedSource,
+  updateFeedSource,
+  deleteFeedSource,
+} from "@/actions/feed"
+import {
   CompetitorManagement,
   type Competitor,
 } from "@/components/competitor-reference-card"
+import { Rss, Eye, EyeOff, Trash2, Plus } from "lucide-react"
 
-type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai" | "competitors"
+type TabType = "basic" | "dimensions" | "hierarchy" | "members" | "ai" | "competitors" | "feed-sources"
 
 type ProjectData = {
   id: string
@@ -111,6 +118,12 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
   const [userName, setUserName] = useState("")
   const [userInitials, setUserInitials] = useState("")
   const [competitorsList, setCompetitorsList] = useState<Competitor[]>([])
+  const [feedSourcesList, setFeedSourcesList] = useState<{
+    id: string; name: string; url: string; sourceType: string; isActive: boolean; createdAt: Date;
+  }[]>([])
+  const [newFeedName, setNewFeedName] = useState("")
+  const [newFeedUrl, setNewFeedUrl] = useState("")
+  const [newFeedType, setNewFeedType] = useState("rss")
 
   useEffect(() => {
     getProject(projectId).then((p) => {
@@ -130,6 +143,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     loadMembers()
     loadDimensions()
     loadCompetitors()
+    loadFeedSourcesList()
     getSessionUser().then((user) => {
       if (user) {
         setUserName(user.name)
@@ -163,6 +177,37 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
     } catch {
       // ignore
     }
+  }
+
+  const loadFeedSourcesList = async () => {
+    try {
+      const sources = await getFeedSources(projectId)
+      setFeedSourcesList(sources as typeof feedSourcesList)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleCreateFeedSource = async () => {
+    if (!newFeedName.trim() || !newFeedUrl.trim()) return
+    await createFeedSource(projectId, {
+      name: newFeedName.trim(),
+      url: newFeedUrl.trim(),
+      sourceType: newFeedType,
+    })
+    setNewFeedName("")
+    setNewFeedUrl("")
+    await loadFeedSourcesList()
+  }
+
+  const handleToggleFeedSource = async (sourceId: string, isActive: boolean) => {
+    await updateFeedSource(sourceId, { isActive })
+    await loadFeedSourcesList()
+  }
+
+  const handleDeleteFeedSource = async (sourceId: string) => {
+    await deleteFeedSource(sourceId)
+    await loadFeedSourcesList()
   }
 
   const handleCreateCompetitor = async (data: { name: string; website?: string; description?: string }) => {
@@ -287,7 +332,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
 
       <div className="flex">
         <div className="w-[200px] border-r border-border p-4 space-y-1">
-          {(["basic", "dimensions", "hierarchy", "members", "ai", "competitors"] as TabType[]).map((tab) => {
+          {(["basic", "dimensions", "hierarchy", "members", "ai", "competitors", "feed-sources"] as TabType[]).map((tab) => {
             const labels: Record<TabType, string> = {
               basic: "基本信息",
               dimensions: "维度管理",
@@ -295,6 +340,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               members: "成员管理",
               ai: "AI配置",
               competitors: "竞品管理",
+              "feed-sources": "订阅源",
             }
             return (
               <button
@@ -598,6 +644,107 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
               onDeleteCompetitor={handleDeleteCompetitor}
               canAdmin={canAdmin}
             />
+          )}
+
+          {/* Feed Sources Management Tab */}
+          {activeTab === "feed-sources" && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold">订阅源管理</h2>
+                  <p className="text-sm text-muted-foreground mt-1">管理行业动态的 RSS 和搜索订阅源</p>
+                </div>
+              </div>
+
+              {/* Add new source form */}
+              <Card className="p-4 mb-6">
+                <h3 className="text-sm font-medium mb-3">添加新订阅源</h3>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="名称"
+                    value={newFeedName}
+                    onChange={(e) => setNewFeedName(e.target.value)}
+                    className="w-40"
+                  />
+                  <Input
+                    placeholder="URL"
+                    value={newFeedUrl}
+                    onChange={(e) => setNewFeedUrl(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Select value={newFeedType} onValueChange={(v) => v && setNewFeedType(v)}>
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rss">RSS</SelectItem>
+                      <SelectItem value="search">搜索</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={handleCreateFeedSource}
+                    disabled={!canAdmin || !newFeedName.trim() || !newFeedUrl.trim()}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    添加
+                  </Button>
+                </div>
+              </Card>
+
+              {/* Source list */}
+              <div className="space-y-2">
+                {feedSourcesList.map((source) => (
+                  <div
+                    key={source.id}
+                    className={cn(
+                      "flex items-center justify-between rounded-md border border-border px-4 py-3",
+                      !source.isActive && "opacity-60",
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Rss className="h-4 w-4 text-muted-foreground" />
+                      <div className={`h-2 w-2 rounded-full ${source.isActive ? "bg-green-500" : "bg-gray-300"}`} />
+                      <div>
+                        <span className="text-sm font-medium">{source.name}</span>
+                        <span className="text-xs text-muted-foreground ml-2">{source.url}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="text-xs">{source.sourceType}</Badge>
+                      <Badge variant={source.isActive ? "default" : "secondary"} className="text-xs">
+                        {source.isActive ? "启用" : "停用"}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleToggleFeedSource(source.id, !source.isActive)}
+                        disabled={!canAdmin}
+                      >
+                        {source.isActive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteFeedSource(source.id)}
+                        disabled={!canAdmin}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {feedSourcesList.length === 0 && (
+                  <div className="text-center text-sm text-muted-foreground py-8">
+                    暂无订阅源，请添加新的订阅源
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

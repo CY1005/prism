@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import health, search, analyze, projects, auth, settings, comparison, snapshot
+from api.routers import health, search, analyze, projects, auth, settings, comparison, snapshot, feed
 from api.routers import import_ as import_router
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,21 @@ async def lifespan(app: FastAPI):
             "Switch docker-compose db image to pgvector/pgvector:pg16 and restart."
         )
 
+    # APScheduler: background feed fetch every 6 hours
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    scheduler = AsyncIOScheduler()
+
+    def scheduled_feed_fetch():
+        logger.info("Scheduled feed fetch triggered — TODO: iterate projects and fetch feeds")
+
+    scheduler.add_job(scheduled_feed_fetch, "interval", hours=6, id="feed_fetch")
+    scheduler.start()
+    logger.info("APScheduler started — feed fetch scheduled every 6 hours")
+
     yield  # app runs here
-    # Cleanup (none needed for now)
+
+    scheduler.shutdown(wait=False)
 
 
 app = FastAPI(
@@ -62,6 +75,7 @@ app.include_router(settings.router, prefix="/api/projects", tags=["settings"])
 app.include_router(import_router.router, prefix="/api/import", tags=["import"])
 app.include_router(comparison.router, prefix="/api/comparison", tags=["comparison"])
 app.include_router(snapshot.router, prefix="/api/snapshot", tags=["snapshot"])
+app.include_router(feed.router, prefix="/api/feed", tags=["feed"])
 
 if __name__ == "__main__":
     import uvicorn
