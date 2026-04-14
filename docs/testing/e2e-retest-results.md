@@ -106,3 +106,32 @@
 
 ### 关键修复说明
 - TP-061/119根本原因：MockEmbeddingProvider使用sin/cos生成的向量在高维空间非正交（随机文本间相似度高达0.87），导致0.3阈值无效。修复后改为seeded Gaussian RNG，不同文本余弦相似度接近0（±0.04），完全满足语义过滤要求。
+
+---
+
+## 第三轮验证：AI Provider (DeepSeek) 配置后重测 (2026-04-14)
+
+### 前置修复
+- `version_records` 表补充 `is_current` 列（snapshot/generate 依赖）
+- 创建 `activity_logs` 表（ai-import 写日志依赖）
+
+### 测试结果
+
+| TP-ID | 测试点名称 | 原结果 | 新结果 | 备注 |
+|-------|-----------|--------|--------|------|
+| TP-013 | F13 触发需求分析 | FAIL(ENV) | **PASS** | SSE流式返回L1分析报告，需补充project_id参数 |
+| TP-015 | F16 生成快照 | FAIL(ENV) | **PASS** | 200，返回summary+8个dimensions |
+| TP-016 | F17 AI导入分析 | FAIL(ENV) | **PASS** | 200，返回session_id+mapping_rows(1项) |
+| TP-067 | F13 L1快速分析 | FAIL(ENV) | **PASS** | SSE流式返回，与TP-013同接口不同参数 |
+| TP-078 | F16 快照snake_case | FAIL(ENV) | **PASS** | snake_case字段(node_id/project_id)正确接受，200 |
+| TP-080 | F17 AI分析含user_id | FAIL(ENV) | **PASS** | user_id字段正确接受，200（非422） |
+| TP-081 | F17 AI响应含mapping_rows | FAIL(ENV) | **PASS** | 响应含mapping_rows字段（非mappings） |
+| TP-082 | F17 确认导入端点 | FAIL(ENV) | **PASS** | 200，imported=1，返回created_node_ids |
+| TP-083 | F17 撤销导入端点 | FAIL(ENV) | **PASS** | 200，deleted=1，节点成功删除 |
+| TP-107 | F17 文件字段验证 | FAIL(ENV) | **PASS** | name/path字段正确读取，200 |
+
+### 最终通过率
+
+- 上轮通过率: 76.1% (118/155)
+- 本轮新增 PASS: 10
+- 最终通过率: **(118+10)/155 = 82.6% (128/155)**
