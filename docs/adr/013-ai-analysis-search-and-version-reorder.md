@@ -1,14 +1,26 @@
 # ADR-013: AI分析渐进式披露、搜索Hybrid升级、版本重排与权限架构预留
 
-## Status: Accepted
+## Status
 
-## Date: 2026-04-11
+Accepted
 
-## Context
+## Date
+
+2026-04-11
+
+## Context and Problem Statement
 
 F6-F20的需求讨论涉及AI能力设计、搜索策略、功能版本排序、权限架构等跨功能的架构决策。CY的工作强度为满负荷（白天395版本测试 + 晚间Prism开发1-1.5h），版本排序需要基于实际开发节奏。
 
-## Decision
+## Decision Drivers
+
+* 350-400功能项的跨模块依赖密，AI分析需要灵活的上下文控制
+* 全量灌入超context window，但太窄又漏掉影响面
+* 搜索需要兼顾精确匹配（工单ID/内部缩写）和语义匹配
+* 版本排序需要匹配"先进数据→再看全貌→再AI分析"的实际使用路径
+* 权限架构需要为团队化预留但不过度实现
+
+## Decision Outcome
 
 ### 决策1：F13 AI分析采用渐进式披露的三层上下文
 
@@ -117,16 +129,13 @@ CY指出：团队化后不同角色可能看到的模块不同，要在架构上
 
 ## Consequences
 
-- **好处**：
-  - 渐进式披露让AI分析既快又深，用户自己控制成本
-  - Hybrid搜索符合行业共识，不需要用户学习新交互
-  - 版本重排匹配实际使用路径，冷启动前置
-  - 权限架构预留避免未来重构
-- **代价**：
-  - 渐进式三层分析增加前端交互复杂度
-  - Hybrid搜索依赖pgvector（v0.4才上）
-  - 新增v0.4版本，整体交付周期拉长
-  - 权限过滤层即使现在直通也要写，增加初期开发量
-- **技术债**：
-  - test-workflow Skill需要改造为API可调用形式
-  - RSS抓取需要后台定时任务基础设施
+* Good, because 渐进式披露让AI分析既快又深，用户自己控制token成本
+* Good, because Hybrid搜索符合行业共识（Notion/Obsidian/Confluence做法），不需要用户学习新交互
+* Good, because 版本重排匹配"先进数据→再看全貌→再AI分析"的实际使用路径
+* Good, because 权限架构预留避免团队化时大规模重构
+* Bad, because 渐进式三层分析增加前端交互复杂度（L1/L2/L3三个入口）
+* Bad, because Hybrid搜索依赖pgvector（v0.4才上），v0.1-v0.3只有关键词搜索
+* Bad, because 新增v0.4版本，整体交付周期拉长
+* Bad, because 权限过滤层即使现在直通也要写，增加初期开发量
+* Neutral, because test-workflow Skill需要改造为API可调用形式（技术债）
+* Neutral, because RSS抓取需要后台定时任务基础设施（技术债）
