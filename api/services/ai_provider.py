@@ -234,6 +234,75 @@ class CodexProvider(LLMProvider):
             return data["choices"][0]["message"]["content"]
 
 
+class DeepSeekProvider(LLMProvider):
+    """DeepSeek API provider (OpenAI-compatible)."""
+
+    API_URL = "https://api.deepseek.com/v1/chat/completions"
+
+    def __init__(self, api_key: str, model: str = "deepseek-chat"):
+        self.api_key = api_key
+        self.model = model
+
+    async def _stream(self, prompt: str, context: str) -> AsyncGenerator[str, None]:
+        messages = []
+        if context:
+            messages.append({"role": "system", "content": context})
+        messages.append({"role": "user", "content": prompt})
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                self.API_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "stream": True,
+                    "messages": messages,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data)
+                        delta = event.get("choices", [{}])[0].get("delta", {})
+                        text = delta.get("content", "")
+                        if text:
+                            yield text
+                    except (json.JSONDecodeError, IndexError):
+                        continue
+
+    async def analyze(self, prompt: str, context: str = "") -> AsyncGenerator[str, None]:
+        async for chunk in self._stream(prompt, context):
+            yield chunk
+
+    async def generate(self, prompt: str, context: str = "") -> str:
+        messages = []
+        if context:
+            messages.append({"role": "system", "content": context})
+        messages.append({"role": "user", "content": prompt})
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                self.API_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"model": self.model, "messages": messages},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+
+
 class MockProvider(LLMProvider):
     """Mock provider returning realistic test data for dev/frontend work."""
 
@@ -279,6 +348,7 @@ def get_provider(ai_provider: str, api_key: str | None = None) -> LLMProvider:
         "claude": ClaudeProvider,
         "kimi": KimiProvider,
         "codex": CodexProvider,
+        "deepseek": DeepSeekProvider,
     }
 
     if ai_provider in ("mock", "local") or not api_key:
