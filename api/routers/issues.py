@@ -6,7 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Any, List, Optional
 
 from api.db import get_db
 from api.models.tables import Issue, User
@@ -23,6 +23,7 @@ class IssueCreate(BaseModel):
     description: str
     severity: str = "medium"
     status: str = "open"
+    tags: List[Any] = []
 
 
 class IssueUpdate(BaseModel):
@@ -31,6 +32,7 @@ class IssueUpdate(BaseModel):
     description: Optional[str] = None
     severity: Optional[str] = None
     status: Optional[str] = None
+    tags: Optional[List[Any]] = None
 
 
 class IssueResponse(BaseModel):
@@ -42,6 +44,7 @@ class IssueResponse(BaseModel):
     description: str
     severity: str
     status: str
+    tags: List[Any] = []
     created_at: Optional[str]
     updated_at: Optional[str]
 
@@ -54,12 +57,13 @@ def create_issue(
     db: Session = Depends(get_db),
 ):
     """Create a new issue for a project."""
+    import json
     from sqlalchemy import text
     result = db.execute(
         text("""
-            INSERT INTO issues (id, project_id, node_id, category, title, description, severity, status, created_by)
-            VALUES (:id, :project_id, :node_id, :category, :title, :description, :severity, :status, :created_by)
-            RETURNING id, project_id, node_id, category, title, description, severity, status, created_at, updated_at
+            INSERT INTO issues (id, project_id, node_id, category, title, description, severity, status, tags, created_by)
+            VALUES (:id, :project_id, :node_id, :category, :title, :description, :severity, :status, cast(:tags as jsonb), :created_by)
+            RETURNING id, project_id, node_id, category, title, description, severity, status, tags, created_at, updated_at
         """),
         {
             "id": str(uuid.uuid4()),
@@ -70,6 +74,7 @@ def create_issue(
             "description": req.description,
             "severity": req.severity,
             "status": req.status,
+            "tags": json.dumps(req.tags),
             "created_by": str(user.id),
         }
     )
@@ -84,8 +89,9 @@ def create_issue(
         "description": row[5],
         "severity": row[6],
         "status": row[7],
-        "created_at": row[8].isoformat() if row[8] else None,
-        "updated_at": row[9].isoformat() if row[9] else None,
+        "tags": row[8] if row[8] is not None else [],
+        "created_at": row[9].isoformat() if row[9] else None,
+        "updated_at": row[10].isoformat() if row[10] else None,
     }
 
 
@@ -98,7 +104,7 @@ def list_issues(
     """List issues for a project."""
     from sqlalchemy import text
     result = db.execute(
-        text("SELECT id, project_id, node_id, category, title, description, severity, status, created_at, updated_at FROM issues WHERE project_id = :project_id"),
+        text("SELECT id, project_id, node_id, category, title, description, severity, status, tags, created_at, updated_at FROM issues WHERE project_id = :project_id"),
         {"project_id": project_id}
     )
     return [
@@ -111,8 +117,9 @@ def list_issues(
             "description": row[5],
             "severity": row[6],
             "status": row[7],
-            "created_at": row[8].isoformat() if row[8] else None,
-            "updated_at": row[9].isoformat() if row[9] else None,
+            "tags": row[8] if row[8] is not None else [],
+            "created_at": row[9].isoformat() if row[9] else None,
+            "updated_at": row[10].isoformat() if row[10] else None,
         }
         for row in result.fetchall()
     ]
@@ -147,9 +154,18 @@ def update_issue(
         updates["severity"] = req.severity
     if req.status is not None:
         updates["status"] = req.status
+    if req.tags is not None:
+        import json
+        updates["tags"] = json.dumps(req.tags)
 
     if updates:
-        set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+        set_parts = []
+        for k in updates:
+            if k == "tags":
+                set_parts.append(f"{k} = cast(:{k} as jsonb)")
+            else:
+                set_parts.append(f"{k} = :{k}")
+        set_clause = ", ".join(set_parts)
         updates["id"] = issue_id
         updates["project_id"] = project_id
         db.execute(
@@ -159,7 +175,7 @@ def update_issue(
         db.commit()
 
     row = db.execute(
-        text("SELECT id, project_id, node_id, category, title, description, severity, status, created_at, updated_at FROM issues WHERE id = :id"),
+        text("SELECT id, project_id, node_id, category, title, description, severity, status, tags, created_at, updated_at FROM issues WHERE id = :id"),
         {"id": issue_id}
     ).fetchone()
     return {
@@ -171,8 +187,9 @@ def update_issue(
         "description": row[5],
         "severity": row[6],
         "status": row[7],
-        "created_at": row[8].isoformat() if row[8] else None,
-        "updated_at": row[9].isoformat() if row[9] else None,
+        "tags": row[8] if row[8] is not None else [],
+        "created_at": row[9].isoformat() if row[9] else None,
+        "updated_at": row[10].isoformat() if row[10] else None,
     }
 
 

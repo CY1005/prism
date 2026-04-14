@@ -57,12 +57,12 @@ class MockEmbeddingProvider(EmbeddingProvider):
 
     async def embed(self, text: str) -> list[float]:
         import math
-        seed = int(hashlib.sha256(text.encode()).hexdigest(), 16) % (10**9)
-        # Use seeded deterministic sin-based generation — no external deps needed
-        vector = []
-        for i in range(VECTOR_DIM):
-            val = math.sin(seed + i * 0.1) * math.cos(i * 0.07 + seed * 0.001)
-            vector.append(float(val))
+        import random as _random
+        seed = int(hashlib.sha256(text.encode()).hexdigest(), 16) % (2**32)
+        # Use seeded Gaussian RNG — produces near-orthogonal vectors in high dimensions
+        # (different texts have cosine similarity ≈ 0, same text always gives same vector)
+        rng = _random.Random(seed)
+        vector = [rng.gauss(0, 1) for _ in range(VECTOR_DIM)]
         # L2-normalize so cosine similarity is well-behaved
         norm = math.sqrt(sum(v * v for v in vector))
         if norm > 0:

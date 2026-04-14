@@ -250,6 +250,7 @@ class Issue(Base):
     description = Column(Text, nullable=False)
     severity = Column(Text, nullable=False, default="medium")
     status = Column(Text, nullable=False, default="open")
+    tags = Column(JSONB, server_default="[]")
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
