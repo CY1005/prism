@@ -70,6 +70,8 @@ interface ImportWizardProps {
   projectName: string;
   folders: FlatFolder[];
   dimensions: DimOption[];
+  /** When false, omit the outer min-h-screen wrapper and header (used when embedded in ImportPageClient). Default: true */
+  standalone?: boolean;
 }
 
 const STEPS = [
@@ -234,6 +236,7 @@ export function ImportWizard({
   projectName,
   folders,
   dimensions,
+  standalone = true,
 }: ImportWizardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -510,25 +513,27 @@ export function ImportWizard({
 
   // ─── Render ───────────────────────────────────
 
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
-      <header className="flex h-14 items-center justify-between border-b px-6">
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/projects/${projectId}`}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4 inline mr-1" />
-            {projectName}
-          </Link>
-          <Separator orientation="vertical" className="h-6" />
-          <h1 className="text-lg font-semibold">导入文档</h1>
-        </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/projects/${projectId}`}>取消</Link>
-        </Button>
-      </header>
+  const innerContent = (
+    <div className="flex flex-col" style={standalone ? { minHeight: "100vh" } : { flex: 1 }}>
+      {/* Header — only in standalone mode */}
+      {standalone && (
+        <header className="flex h-14 items-center justify-between border-b px-6">
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/projects/${projectId}`}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4 inline mr-1" />
+              {projectName}
+            </Link>
+            <Separator orientation="vertical" className="h-6" />
+            <h1 className="text-lg font-semibold">导入文档</h1>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/projects/${projectId}`}>取消</Link>
+          </Button>
+        </header>
+      )}
 
       {/* Step Indicator */}
       <div className="px-6 py-4">
@@ -1060,4 +1065,9 @@ export function ImportWizard({
       </Dialog>
     </div>
   );
+
+  if (standalone) {
+    return <div className="bg-background">{innerContent}</div>;
+  }
+  return innerContent;
 }

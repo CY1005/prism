@@ -1,7 +1,7 @@
 import { getProject } from "@/actions/projects";
 import { getProjectTree, getProjectDimensions } from "@/actions/nodes";
 import { notFound } from "next/navigation";
-import { ImportWizard } from "./import-wizard";
+import { ImportPageClient } from "./import-page-client";
 
 export default async function ImportPage({
   params,
@@ -42,7 +42,7 @@ export default async function ImportPage({
   }));
 
   return (
-    <ImportWizard
+    <ImportPageClient
       projectId={projectId}
       projectName={project.name}
       folders={folders}

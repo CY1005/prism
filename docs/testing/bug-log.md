@@ -401,3 +401,106 @@ Agent Team 并行开发模式下，**必须有 contract-first 机制**：
 BUG-051/052 与 Phase 7 的 BUG-043~050 **同一根因**：Backend Agent 和 Frontend Agent 并行开发，snapshot 端点的 Phase 8 代码实际在 Phase 3 commit 中一起提交（`89eae64`），跳过了独立 QA 验证环节，导致契约不匹配问题在生产中存在但从未被发现。
 
 BUG-053 属于**跨架构边界遗漏**：Next.js Server Actions 内部的 CRUD 操作已正确接入 logActivity（11处调用），但 FastAPI 侧的 AI 分析端点走的是独立 HTTP 调用路径，不经过 Server Action 层，因此 logActivity 调用链断裂。
+
+---
+
+## BUG-054 ~ BUG-062: v0.4 Phase 9 — F17 AI智能导入前后端契约漂移（9 个）
+
+- **日期**: 2026-04-14
+- **来源**: Phase 9 QA 验证——前后端 API 契约逐字段对齐审查
+- **状态**: 全部待修
+- **详细记录**: `docs/testing/test-checklist-v0.4-phase9.md`
+
+### 根因
+
+Server Action (`import-ai.ts`) 的 3 个函数与后端 Pydantic schema **已经完全对齐**。但 `ai-import-wizard.tsx` 组件**完全绕过 Server Action**，自行用 `fetch()` 直接调用后端 API，且所有 4 个端点的请求体字段名、响应字段名、字段类型全部与后端不匹配。
+
+这是 Phase 7/8 契约漂移问题的升级版——不是"两个 Agent 各写各的"，而是"Server Action 已对齐但组件层没用它"。
+
+### BUG-054 (Critical): ai-analyze 缺少 user_id + 直接 fetch 绕过 auth
+
+- **严重度**: Critical
+- **问题描述**: `ai-import-wizard.tsx:428-434` 直接 `fetch("/api/import/ai-analyze")` 而非调用 `import-ai.ts` 的 `aiAnalyzeZip()` server action。请求体缺少必填字段 `user_id`。
+- **根因**: 前端组件开发时未使用已有的 Server Action，自行实现了一套 fetch 调用
+- **修复建议**: 将 `handleAnalyze()` 改为调用 `aiAnalyzeZip(projectId, filePayload)`
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:416-456`
+
+### BUG-055 (Critical): ai-analyze files 子字段名不匹配
+
+- **严重度**: Critical
+- **问题描述**: 前端发送 `{file_name, file_path, content, format}`，后端 `ai_import.py:143` 读取 `file.get("path")` 和 `file.get("name")`。`file_name` 和 `file_path` 不会被读取，导致所有文件的 source_path 为空字符串。
+- **根因**: 前端使用 camelCase-like 命名（file_name），后端使用 import_handler 的原始字段名（name, path）
+- **修复建议**: 改为调用 Server Action（自动透传原始 files 结构），或修正字段名为 `{name, path, content, format}`
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:421-426`
+
+### BUG-056 (Critical): ai-analyze 响应字段名不匹配
+
+- **严重度**: Critical
+- **问题描述**: 前端 `ai-import-wizard.tsx:282-294` 定义的 `AIAnalyzeResult` 类型期望 `data.mappings`，但后端 `ai_import.py:507-514` 返回 `mapping_rows`。前端会读到 `undefined`，映射表为空。
+- **根因**: 前端组件定义了独立的响应类型，与后端实际返回结构不一致
+- **修复建议**: 改为调用 Server Action 并使用 `import-ai.ts` 中已正确定义的 `AIAnalyzeResult` 类型
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:282-294,444`
+
+### BUG-057 (High): confidence 类型不匹配
+
+- **严重度**: High
+- **问题描述**: `ai-mapping-table.tsx:42` 定义 `confidence` 为 `Confidence` 类型（"high"|"medium"|"low" string enum），但后端 `ai_import.py:225` 返回 `confidence` 为 `int` (0-100)。前端排序、过滤、badge 渲染全部依赖 string enum，int 值无法匹配。
+- **根因**: 前端组件独立定义了与后端不同的 confidence 类型
+- **修复建议**: 在数据转换层增加 int->string 映射（>=85="high", >=60="medium", <60="low"），或者统一为 number 类型并调整 UI 逻辑
+- **受影响文件**: `web/src/components/ai-mapping-table.tsx:34-48,72-106`, `web/src/components/ai-import-wizard.tsx:282-294`
+
+### BUG-058 (High): ai-mapping 请求字段名不匹配
+
+- **严重度**: High
+- **问题描述**: 前端 `ai-import-wizard.tsx:471-478` 发送 `{project_id, changes: [{row_id, module_id, dimension_id}]}`，后端 `import_.py:110-115` 期望 `{session_id, project_id, adjustments: [{id, recommended_module_id, ...}]}`。缺少 `session_id`，`changes` vs `adjustments`，子字段全部不匹配。
+- **根因**: 前端组件独立实现，未参考后端 schema
+- **修复建议**: 此端点为 fire-and-forget（前端是状态源），修正字段名即可。或者考虑移除此端点（纯前端状态管理不需要后端校验）
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:460-484`
+
+### BUG-059 (Critical): ai-confirm 请求字段名全面不匹配
+
+- **严重度**: Critical
+- **问题描述**: 前端 `ai-import-wizard.tsx:548-554` 发送 `{project_id, items: [...]}`, 后端 `import_.py:146-153` 期望 `{session_id, project_id, user_id, mapping_rows: [...]}`. 缺少 `session_id` 和 `user_id`，`items` vs `mapping_rows`，子结构也完全不同（前端发 row_id/file_name/target_node_id，后端期望完整 mapping row dict）。
+- **根因**: 同 BUG-054，直接 fetch 绕过 Server Action
+- **修复建议**: 改为调用 `aiConfirmImport(projectId, sessionId, mappingRows)`
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:503-587`
+
+### BUG-060 (High): ai-confirm 响应字段名不匹配
+
+- **严重度**: High
+- **问题描述**: 前端 `ai-import-wizard.tsx:574` 读取 `result.import_session_id`，但后端 `ai_import.py:692` 返回字段名为 `session_id`。导致 `importSessionId` 状态为 `undefined`，撤销功能无法触发。
+- **根因**: 前端组件 `AIConfirmResult` 类型定义（line 296-302）的字段名与后端不一致
+- **修复建议**: 改为调用 Server Action，使用 `import-ai.ts` 中已正确定义的类型
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:296-302,574`
+
+### BUG-061 (Critical): undo 请求字段名不匹配 + 缺少必填字段
+
+- **严重度**: Critical
+- **问题描述**: 前端 `ai-import-wizard.tsx:597-603` 发送 `{project_id, import_session_id}`，后端 `import_.py:189-195` 期望 `{session_id, project_id, user_id, created_node_ids: [...]}`。缺少 `user_id` 和 `created_node_ids`（两个 required 字段），`import_session_id` vs `session_id`。
+- **根因**: 同 BUG-054，直接 fetch 绕过 Server Action
+- **修复建议**: 改为调用 `aiUndoImport(projectId, sessionId, createdNodeIds)`
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:591-617`
+
+### BUG-062 (High): AI 导入全部端点绕过认证
+
+- **严重度**: High (安全)
+- **问题描述**: `ai-import-wizard.tsx` 的 4 个 fetch 调用直接请求 `/api/import/*`，完全绕过了 `import-ai.ts` Server Action 中的 `requireAuth()` + `checkProjectAccess("editor")` 校验。如果 Next.js 配置了 API proxy 到 FastAPI，未认证用户可直接调用 AI 导入功能。
+- **根因**: 前端组件绕过 Server Action 层
+- **修复建议**: 改为调用 Server Action（一次性解决全部契约问题 + 认证问题）
+- **受影响文件**: `web/src/components/ai-import-wizard.tsx:428,471,548,597`
+
+### 统计
+
+| 严重度 | 数量 | 涉及端点 |
+|--------|------|---------|
+| Critical | 5 | ai-analyze(2), ai-confirm(1), undo(1), 文件字段(1) |
+| High | 4 | confidence类型(1), ai-mapping(1), confirm响应(1), 认证绕过(1) |
+| **合计** | **9** | |
+
+### 教训
+
+1. **Server Action 写了但没用**：这是比"没写"更危险的情况——import-ai.ts 的契约已经对齐，给人"已联调"的假象。实际上 ai-import-wizard.tsx 根本没调用它，自己写了一套不兼容的 fetch 逻辑。**Quality Gate 应检查：每个 Server Action 必须有 grep 到的调用方**。
+
+2. **组件内定义重复类型**：ai-import-wizard.tsx:282-302 定义了 `AIAnalyzeResult` 和 `AIConfirmResult`，与 import-ai.ts 中的同名类型字段不同。重复类型定义是契约漂移的温床。**应统一从 Server Action 导出类型定义**。
+
+3. **直接 fetch vs Server Action**：Next.js Server Action 是前后端契约的唯一桥梁，绕过它不仅丢失类型安全，还丢失认证和权限校验。**前端组件不应直接 fetch 后端 API**。
