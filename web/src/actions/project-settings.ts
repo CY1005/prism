@@ -1,13 +1,5 @@
 "use server";
 
-export {
-  updateProject,
-  getProjectMembers,
-  addProjectMember,
-  removeProjectMember,
-  updateProjectAIConfig,
-} from "./projects";
-
 import { db } from "@/db";
 import { projectDimensionConfigs, dimensionTypes } from "@/db/schema";
 import { eq, and } from "drizzle-orm";

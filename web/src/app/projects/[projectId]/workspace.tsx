@@ -19,6 +19,7 @@ import {
   Upload,
   Sparkles,
   BookOpen,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -47,6 +48,7 @@ import {
 import { FeatureTree, type TreeNode } from "@/components/feature-tree";
 import { DimensionCard } from "@/components/dimension-card";
 import { VersionTimeline, type VersionRecord } from "@/components/version-timeline";
+import { SnapshotResult, type SnapshotData } from "@/components/snapshot-result";
 import { cn } from "@/lib/utils";
 import {
   getNodeWithDimensions,
@@ -314,6 +316,11 @@ export function ProjectWorkspace({
   // Panorama prompt after first dimension record saved
   const [showPanoramaPrompt, setShowPanoramaPrompt] = useState(false);
 
+  // F16: Snapshot states
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotData, setSnapshotData] = useState<SnapshotData | null>(null);
+  const [showSnapshotDialog, setShowSnapshotDialog] = useState(false);
+
   // Detect import redirect and auto-navigate to top module
   useEffect(() => {
     const imported = searchParams.get("imported");
@@ -348,6 +355,49 @@ export function ProjectWorkspace({
   // ─── Handlers ───────────────────────────────────────
 
   const refreshPage = () => router.refresh();
+
+  // F16: Generate snapshot
+  const handleGenerateSnapshot = async () => {
+    if (!nodeData) return;
+    setSnapshotLoading(true);
+    try {
+      const res = await fetch("/api/snapshot/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeId: nodeData.node.id }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setSnapshotData(result);
+        setShowSnapshotDialog(true);
+      }
+    } finally {
+      setSnapshotLoading(false);
+    }
+  };
+
+  // F16: Save snapshot
+  const handleSaveSnapshot = async (params: {
+    summary: string;
+    selectedDimensions: { dimensionKey: string; content: string }[];
+  }) => {
+    if (!nodeData) return;
+    await fetch("/api/snapshot/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nodeId: nodeData.node.id,
+        summary: params.summary,
+        selectedDimensions: params.selectedDimensions,
+      }),
+    });
+    setShowSnapshotDialog(false);
+    setSnapshotData(null);
+    // Refresh node data
+    const data = await getNodeWithDimensions(nodeData.node.id);
+    setNodeData(data);
+    refreshPage();
+  };
 
   const handleSelectNode = (id: string, type: "folder" | "file") => {
     setSelectedId(id);
@@ -722,6 +772,22 @@ export function ProjectWorkspace({
                 <GitBranch className="h-3.5 w-3.5" />
                 添加关联
               </Button>
+              {nodeData && nodeData.versions.length >= 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={handleGenerateSnapshot}
+                  disabled={snapshotLoading}
+                >
+                  {snapshotLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  生成当前快照
+                </Button>
+              )}
             </div>
           )}
         </header>
@@ -1154,6 +1220,21 @@ export function ProjectWorkspace({
               {relationSaving ? "保存中..." : "创建关联"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* F16: Snapshot Result Dialog */}
+      <Dialog open={showSnapshotDialog} onOpenChange={setShowSnapshotDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI 快照
+            </DialogTitle>
+          </DialogHeader>
+          {snapshotData && (
+            <SnapshotResult data={snapshotData} onSave={handleSaveSnapshot} />
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -267,6 +267,24 @@ export const competitorReferences = pgTable("competitor_references", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// ─── Activity Logs (F15 数据流转可视化) ──────────────────
+
+export const activityLogs = pgTable("activity_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
+  actionType: text("action_type").notNull(), // 'import' | 'create' | 'update' | 'delete' | 'analyze'
+  targetType: text("target_type").notNull(), // 'node' | 'dimension_record' | 'version' | 'project' | 'relation'
+  targetId: text("target_id").notNull(),
+  summary: text("summary").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // ─── Knowledge Items (shared with FastAPI analyzer) ─────
 
 export const knowledgeItems = pgTable("knowledge_items", {

@@ -13,6 +13,7 @@ import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { logActivity } from "./activity-log";
 
 export async function getVersionsByNode(nodeId: string) {
   const user = await requireAuth();
@@ -124,6 +125,7 @@ export async function createVersion(
       versionId: newVersion.id,
       versionLabel,
     });
+    logActivity({ projectId: node.projectId, userId: user.id, actionType: "create", targetType: "version", targetId: newVersion.id, summary: `创建版本 ${versionLabel}`, metadata: { nodeId, changeType } });
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess({ id: newVersion.id });
@@ -203,6 +205,7 @@ export async function deleteVersion(
       versionId,
       nodeId: version.nodeId,
     });
+    logActivity({ projectId: node.projectId, userId: user.id, actionType: "delete", targetType: "version", targetId: versionId, summary: `删除版本 ${version.versionLabel}`, metadata: { nodeId: version.nodeId } });
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess(undefined);

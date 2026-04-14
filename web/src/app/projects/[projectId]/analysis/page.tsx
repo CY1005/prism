@@ -20,6 +20,7 @@ import {
   TestTube,
   Scan,
   Globe,
+  Sparkles,
 } from "lucide-react"
 import { GlobalSearchBar } from "@/components/global-search-bar"
 import { Card } from "@/components/ui/card"
@@ -115,6 +116,9 @@ export default function AnalysisPage() {
   const [checkedTestPoints, setCheckedTestPoints] = useState<Set<string>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
   const [isSavingTestPoints, setIsSavingTestPoints] = useState(false)
+
+  // F15: Analysis result flow prompt
+  const [analysisFlowMessage, setAnalysisFlowMessage] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const documentInputRef = useRef<HTMLInputElement>(null)
@@ -342,7 +346,15 @@ export default function AnalysisPage() {
     setIsSaving(true)
     const result = await saveAnalysis(projectId, nodeId, layers)
     setIsSaving(false)
-    if (!result.ok) setError(result.error)
+    if (!result.ok) {
+      setError(result.error)
+    } else {
+      // F15: Show flow prompt
+      const totalModules = layers.reduce((sum, l) => sum + l.affected_modules.length, 0)
+      setAnalysisFlowMessage(
+        `分析结果已保存到功能项 ${nodeId} 的需求分析维度，涉及 ${totalModules} 个模块`
+      )
+    }
   }
 
   const handleSaveTestPoints = async () => {
@@ -358,7 +370,13 @@ export default function AnalysisPage() {
     )
     const result = await saveTestPoints(projectId, nodeId, selectedPoints)
     setIsSavingTestPoints(false)
-    if (!result.ok) setError(result.error)
+    if (!result.ok) {
+      setError(result.error)
+    } else {
+      setAnalysisFlowMessage(
+        `分析结果已保存到功能项 ${nodeId} 的需求分析维度，生成了 ${selectedPoints.length} 条测试点`
+      )
+    }
   }
 
   const toggleTestPoint = (id: string) => {
@@ -638,6 +656,22 @@ export default function AnalysisPage() {
         <div className="w-1/2 flex flex-col">
           <ScrollArea className="flex-1">
             <div className="p-6 space-y-6">
+              {/* F15: Analysis Result Flow Prompt */}
+              {analysisFlowMessage && (
+                <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                  <Sparkles className="h-5 w-5 text-primary shrink-0" />
+                  <p className="text-sm flex-1">{analysisFlowMessage}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 text-xs"
+                    onClick={() => setAnalysisFlowMessage(null)}
+                  >
+                    知道了
+                  </Button>
+                </div>
+              )}
+
               {/* Error State */}
               {error && (
                 <Card className="border-destructive/60 shadow-sm p-5">

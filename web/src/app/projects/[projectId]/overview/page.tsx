@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useEffect } from "react"
-import { Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate } from "lucide-react"
+import { Bell, ChevronRight, LogOut, Settings, Shield, Upload, FolderUp, Plus, Loader2, FileUp, LayoutTemplate, Clock } from "lucide-react"
 import { ImportCSVModal } from "@/components/import-csv-modal"
 import { GlobalSearchBar } from "@/components/global-search-bar"
 import { TreemapView } from "@/components/treemap-view"
@@ -26,6 +26,7 @@ import { detailStrings, recentUpdates } from "@/lib/project-detail-data"
 import { openclawStrings, openclawRecentUpdates } from "@/lib/openclaw-data"
 import { getProjectStats, getProjectTreeOverview, type ProjectStats, type TreeNodeOverview } from "@/services/project-stats"
 import { getPanoramaData, getProjectStats as getPanoramaStats } from "@/actions/panorama"
+import { getActivityLogs } from "@/actions/activity-log"
 import { useProjectRole } from "@/contexts/project-role-context"
 
 function getStatusColor(percent: number) {
@@ -67,6 +68,19 @@ export default function ProjectOverviewPage() {
     lastUpdatedAt: Date | null
   } | null>(null)
 
+  // F15: Activity log state
+  const [showActivityLog, setShowActivityLog] = useState(false)
+  const [activityLogs, setActivityLogs] = useState<{
+    id: string;
+    actionType: string;
+    targetType: string;
+    summary: string;
+    createdAt: string | Date;
+    metadata: Record<string, unknown> | null;
+  }[]>([])
+  const [activityPage, setActivityPage] = useState(1)
+  const [activityLoading, setActivityLoading] = useState(false)
+
   useEffect(() => {
     setStatsLoading(true)
     getProjectStats(projectId).then((r) => {
@@ -93,6 +107,29 @@ export default function ProjectOverviewPage() {
       if (r.success) setPanoramaStatsData(r.data)
     })
   }, [projectId])
+
+  // F15: Load activity logs
+  const loadActivityLogs = async (page: number) => {
+    setActivityLoading(true)
+    try {
+      const result = await getActivityLogs(projectId, page, 20)
+      if (page === 1) {
+        setActivityLogs(result.logs as typeof activityLogs)
+      } else {
+        setActivityLogs((prev) => [...prev, ...(result.logs as typeof activityLogs)])
+      }
+      setActivityPage(page)
+    } finally {
+      setActivityLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (showActivityLog && activityLogs.length === 0) {
+      loadActivityLogs(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showActivityLog])
 
   const isOpenClaw = projectId === "2"
   const strings = isOpenClaw ? openclawStrings : detailStrings
@@ -185,6 +222,16 @@ export default function ProjectOverviewPage() {
         <Link href={`/projects/${projectId}/relation-graph`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           关系图
         </Link>
+        <button
+          onClick={() => setShowActivityLog(!showActivityLog)}
+          className={`pb-3 pt-2 text-sm ${
+            showActivityLog
+              ? "border-b-2 border-primary text-primary font-medium"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          活动日志
+        </button>
         <div className="flex-1" />
         <Link href={`/projects/${projectId}/settings`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm flex items-center gap-1">
           <Settings className="h-3.5 w-3.5" />
@@ -439,6 +486,92 @@ export default function ProjectOverviewPage() {
           </div>
         </Card>
       </div>
+
+      {/* F15: Activity Log Panel */}
+      {showActivityLog && (
+        <div className="px-6 pb-6">
+          <Card className="border-border/60 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <h2 className="text-lg font-semibold">活动日志</h2>
+                <Badge variant="secondary" className="text-xs">
+                  {activityLogs.length} 条
+                </Badge>
+              </div>
+            </div>
+
+            {activityLoading && activityLogs.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                加载活动日志中...
+              </div>
+            ) : activityLogs.length === 0 ? (
+              <div className="text-center text-sm text-muted-foreground py-8">
+                暂无活动记录
+              </div>
+            ) : (
+              <div className="space-y-0">
+                {activityLogs.map((log) => {
+                  const time = typeof log.createdAt === "string"
+                    ? new Date(log.createdAt)
+                    : log.createdAt
+                  return (
+                    <div
+                      key={log.id}
+                      className="flex items-center gap-3 py-3 border-b border-border/60 last:border-0"
+                    >
+                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted shrink-0">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm">{log.summary}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge variant="secondary" className="text-xs">
+                            {log.actionType}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {log.targetType}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {time instanceof Date && !isNaN(time.getTime())
+                          ? time.toLocaleString("zh-CN", {
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : String(log.createdAt)}
+                      </span>
+                    </div>
+                  )
+                })}
+
+                {/* Load more */}
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadActivityLogs(activityPage + 1)}
+                    disabled={activityLoading}
+                  >
+                    {activityLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        加载中...
+                      </>
+                    ) : (
+                      "加载更多"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

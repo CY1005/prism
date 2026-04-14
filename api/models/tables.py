@@ -161,6 +161,10 @@ class VersionRecord(Base):
     version_label = Column(Text, nullable=False)
     summary = Column(Text, nullable=False)
     details = Column(Text)
+    change_type = Column(Text, nullable=False, default="added")
+    is_current = Column(Boolean, nullable=False, default=False)
+    snapshot_data = Column(JSONB)
+    mode = Column(Text, nullable=False, default="release")
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -262,6 +266,21 @@ class Competitor(Base):
 
 
 # ─── Competitor References (F6 竞品参考记录) ──────────
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    action_type = Column(Text, nullable=False)
+    target_type = Column(Text, nullable=False)
+    target_id = Column(Text, nullable=False)
+    summary = Column(Text, nullable=False)
+    metadata_ = Column("metadata", JSONB)
+    created_at = Column(DateTime, server_default=func.now())
+
 
 class CompetitorReference(Base):
     __tablename__ = "competitor_references"

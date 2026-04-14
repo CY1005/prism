@@ -15,6 +15,7 @@ import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { logActivity } from "./activity-log";
 
 export async function getProjectTree(projectId: string) {
   const user = await requireAuth();
@@ -207,6 +208,7 @@ export async function createNode(
       nodeId: newNode.id,
       type,
     });
+    logActivity({ projectId, userId: user.id, actionType: "create", targetType: "node", targetId: newNode.id, summary: `创建${type === "folder" ? "文件夹" : "功能项"} "${name}"` });
     revalidatePath(`/projects/${projectId}`);
 
     return actionSuccess({ id: newNode.id });
@@ -243,6 +245,7 @@ export async function createDimensionRecord(
       nodeId,
       dimensionTypeId,
     });
+    logActivity({ projectId: node.projectId, userId: user.id, actionType: "create", targetType: "dimension_record", targetId: record.id, summary: `创建维度记录`, metadata: { nodeId, dimensionTypeId } });
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess({ id: record.id });
@@ -302,6 +305,7 @@ export async function updateDimensionRecord(
       recordId,
       newVersion: updated.version,
     });
+    if (node) logActivity({ projectId: node.projectId, userId: user.id, actionType: "update", targetType: "dimension_record", targetId: recordId, summary: `更新维度记录 v${updated.version}`, metadata: { newVersion: updated.version } });
 
     if (node) revalidatePath(`/projects/${node.projectId}`);
 
@@ -337,6 +341,7 @@ export async function deleteDimensionRecord(
       .where(eq(dimensionRecords.id, recordId));
 
     logger.action("dimension.delete", user.id, { recordId });
+    if (node) logActivity({ projectId: node.projectId, userId: user.id, actionType: "delete", targetType: "dimension_record", targetId: recordId, summary: `删除维度记录` });
 
     if (node) revalidatePath(`/projects/${node.projectId}`);
 
@@ -367,6 +372,7 @@ export async function renameNode(
       .where(eq(nodes.id, nodeId));
 
     logger.action("node.rename", user.id, { nodeId, newName });
+    logActivity({ projectId: node.projectId, userId: user.id, actionType: "update", targetType: "node", targetId: nodeId, summary: `重命名节点为 "${newName}"` });
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess(undefined);
@@ -408,6 +414,7 @@ export async function deleteNode(nodeId: string): Promise<ActionResult> {
       nodeId,
       projectId: node.projectId,
     });
+    logActivity({ projectId: node.projectId, userId: user.id, actionType: "delete", targetType: "node", targetId: nodeId, summary: `删除节点 "${node.name}"`, metadata: { descendantCount: allIds.length - 1 } });
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess(undefined);
@@ -736,6 +743,7 @@ export async function importNodesFromCSV(
     }
 
     logger.action("node.importCSV", user.id, { projectId, importedCount });
+    logActivity({ projectId, userId: user.id, actionType: "import", targetType: "node", targetId: projectId, summary: `CSV导入${importedCount}个节点`, metadata: { importedCount, errorCount: errors.length } });
     revalidatePath(`/projects/${projectId}`);
 
     return actionSuccess({ imported: importedCount, errors });
@@ -900,6 +908,7 @@ export async function moveNode(
       newParentId,
       projectId: node.projectId,
     });
+    logActivity({ projectId: node.projectId, userId: user.id, actionType: "update", targetType: "node", targetId: nodeId, summary: `移动节点 "${node.name}"`, metadata: { newParentId } });
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess(undefined);
