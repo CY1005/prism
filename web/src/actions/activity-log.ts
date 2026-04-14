@@ -33,6 +33,24 @@ export async function logActivity(params: {
   }
 }
 
+// ─── Log Activity with auto-auth (for client components) ─
+
+export async function logActivityAuto(params: {
+  projectId: string;
+  actionType: string;
+  targetType: string;
+  targetId: string;
+  summary: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const user = await requireAuth();
+    await logActivity({ ...params, userId: user.id });
+  } catch (err) {
+    console.error("Failed to log activity (auto):", err);
+  }
+}
+
 // ─── Get Activity Logs (paginated) ──────────────────────
 
 export async function getActivityLogs(

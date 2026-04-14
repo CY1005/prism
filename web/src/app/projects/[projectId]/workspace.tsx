@@ -364,7 +364,7 @@ export function ProjectWorkspace({
       const res = await fetch("/api/snapshot/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodeId: nodeData.node.id }),
+        body: JSON.stringify({ node_id: nodeData.node.id, project_id: project.id }),
       });
       if (res.ok) {
         const result = await res.json();
@@ -386,9 +386,13 @@ export function ProjectWorkspace({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        nodeId: nodeData.node.id,
+        node_id: nodeData.node.id,
+        project_id: project.id,
         summary: params.summary,
-        selectedDimensions: params.selectedDimensions,
+        dimensions: params.selectedDimensions.map((d) => ({
+          dimension_type_key: d.dimensionKey,
+          content: { text: d.content },
+        })),
       }),
     });
     setShowSnapshotDialog(false);

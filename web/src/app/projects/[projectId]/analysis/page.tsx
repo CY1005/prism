@@ -59,6 +59,7 @@ import {
   type GenerateTestPointsResponse,
   type AITestPoint,
 } from "@/services/analyzer"
+import { logActivityAuto } from "@/actions/activity-log"
 
 // File upload types
 interface UploadedFile {
@@ -354,6 +355,8 @@ export default function AnalysisPage() {
       setAnalysisFlowMessage(
         `分析结果已保存到功能项 ${nodeId} 的需求分析维度，涉及 ${totalModules} 个模块`
       )
+      // F15: Log to activity_logs
+      logActivityAuto({ projectId, actionType: "analyze", targetType: "node", targetId: nodeId, summary: `AI需求分析完成，涉及 ${totalModules} 个模块`, metadata: { layers: layers.length, totalModules } })
     }
   }
 
@@ -376,6 +379,8 @@ export default function AnalysisPage() {
       setAnalysisFlowMessage(
         `分析结果已保存到功能项 ${nodeId} 的需求分析维度，生成了 ${selectedPoints.length} 条测试点`
       )
+      // F15: Log to activity_logs
+      logActivityAuto({ projectId, actionType: "analyze", targetType: "node", targetId: nodeId, summary: `AI生成 ${selectedPoints.length} 条测试点并录入`, metadata: { testPointCount: selectedPoints.length } })
     }
   }
 

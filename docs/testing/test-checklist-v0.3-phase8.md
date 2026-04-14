@@ -66,29 +66,32 @@
 
 ## F16 BUG 清单
 
-### BUG-F16-01: snapshot/generate 前后端字段名不匹配（严重）
+### BUG-051 (原 BUG-F16-01): snapshot/generate 前后端字段名不匹配（严重）
 
 **File**: `workspace.tsx:367` vs `api/schemas/snapshot.py:5-7`
+**Status**: ✅ 已修复
 
 - 前端发送: `{ nodeId: "xxx" }` (camelCase)
 - 后端期望: `{ node_id: "xxx", project_id: "xxx" }` (snake_case)
 - Pydantic 没有配置 `alias_generator` 或 `populate_by_name`
 - **结果**: 请求会返回 422 Validation Error（缺少 `node_id` 和 `project_id`）
-- **修复建议**: 前端改为 `{ node_id: nodeData.node.id, project_id: project.id }` 或后端 Pydantic model 添加 `model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)`
+- **修复**: 前端改为 `{ node_id: nodeData.node.id, project_id: project.id }`
 
-### BUG-F16-02: snapshot/save 前后端字段名不匹配（严重）
+### BUG-052 (原 BUG-F16-02): snapshot/save 前后端字段名不匹配（严重）
 
 **File**: `workspace.tsx:388-392` vs `api/schemas/snapshot.py:25-30`
+**Status**: ✅ 已修复
 
 - 前端发送: `{ nodeId, summary, selectedDimensions }` (camelCase)
 - 后端期望: `{ node_id, project_id, summary, dimensions }` (snake_case)
 - 字段名也不一致: 前端 `selectedDimensions` vs 后端 `dimensions`
 - **结果**: 请求会返回 422 Validation Error
-- **修复建议**: 同 BUG-F16-01，统一命名
+- **修复**: 前端改为 snake_case + 重构 dimensions 结构匹配 `DimensionSaveItem` schema
 
-### BUG-F16-03: snapshot API 缺少认证和权限校验（安全）
+### BUG-F16-03 (技术债): snapshot API 缺少认证和权限校验（安全）
 
 **File**: `api/routers/snapshot.py`
+**Status**: 📋 技术债（与 F13 同模式，暂不修）
 
 - `generate` 和 `save` 两个端点均未添加认证 middleware
 - 对比其他端点：`analyze.py` 同样未加（因为通过 Next.js proxy 间接调用），但 snapshot 可直接通过 API 端口访问
@@ -175,14 +178,15 @@
 
 ## F15 BUG 清单
 
-### BUG-F15-01: F13 分析操作未写入 activity_logs（功能缺失）
+### BUG-053 (原 BUG-F15-01): F13 分析操作未写入 activity_logs（功能缺失）
 
-**File**: `api/routers/analyze.py`
+**File**: `api/routers/analyze.py` + `web/src/app/projects/[projectId]/analysis/page.tsx`
+**Status**: ✅ 已修复
 
 - F13 需求分析完成后仅在前端弹 Toast 提示，未调用 logActivity 写入 activity_logs
 - 提示词要求: "F13 分析完成时记录分析结果流向"
 - **影响**: 活动日志页看不到 AI 分析操作的历史记录
-- **修复建议**: 在前端 analysis page 的保存成功回调中调用 `logActivity({ actionType: "analyze", ... })`
+- **修复**: 新增 `logActivityAuto()` server action（内部 requireAuth），在 analysis page 的 `handleSaveAnalysis` 和 `handleSaveTestPoints` 成功回调中调用
 
 ---
 
@@ -199,11 +203,11 @@
 
 | ID | 严重度 | 描述 | 影响 |
 |----|--------|------|------|
-| BUG-F16-01 | **严重** | generate 端点前后端字段名不匹配 | 快照生成功能 422 不可用 |
-| BUG-F16-02 | **严重** | save 端点前后端字段名不匹配 | 快照保存功能 422 不可用 |
-| BUG-F16-03 | 低 | snapshot API 缺少后端认证 | 安全技术债（同 F13 模式） |
-| BUG-F15-01 | 中 | F13 分析操作未写入 activity_logs | 活动日志不完整 |
+| BUG-051 | **严重** | generate 端点前后端字段名不匹配 | ✅ 已修复 |
+| BUG-052 | **严重** | save 端点前后端字段名不匹配 | ✅ 已修复 |
+| BUG-F16-03 | 低 | snapshot API 缺少后端认证 | 📋 技术债（同 F13 模式） |
+| BUG-053 | 中 | F13 分析操作未写入 activity_logs | ✅ 已修复 |
 
 ### 结论
 
-**F16 + F15 代码结构完整，但 F16 存在 2 个严重 bug 导致快照功能实际不可用**（前后端字段名不匹配会导致 422 错误）。修复后即可正常使用。
+**F16 + F15 代码结构完整。** 原有 2 个严重 bug（BUG-051/052 前后端字段名不匹配导致 422）和 1 个功能缺失（BUG-053 活动日志遗漏）已全部修复。tsc 验证通过。

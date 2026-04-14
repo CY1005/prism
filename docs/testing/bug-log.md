@@ -379,3 +379,25 @@ Agent Team 并行开发模式下，**必须有 contract-first 机制**：
 2. Frontend 基于 schema 生成 TypeScript 类型
 3. 或者 Team Lead 在分发任务前先定义共享 API contract 文件
 4. QA 验证应包含 "逐字段比对请求/响应 schema" 步骤，不能只看 URL 和顶层字段
+
+---
+
+## BUG-051 ~ BUG-053: v0.3 Phase 8 — F16 快照 + F15 活动日志（3 个）
+
+- **日期**: 2026-04-14
+- **来源**: Phase 8 补充 QA 验证
+- **Commit**: 见下方修复 commit
+- **状态**: 全部已修复
+- **详细记录**: `docs/testing/test-checklist-v0.3-phase8.md`
+
+| ID | Feature | 严重度 | 问题 | 根因 | 修复 |
+|----|---------|--------|------|------|------|
+| BUG-051 | F16 AC2 | **严重** | `POST /api/snapshot/generate`: 前端发 `{ nodeId }` (camelCase), 后端 Pydantic 要 `{ node_id, project_id }` (snake_case) → 422 | 同 BUG-043~050 的 Agent 并行契约漂移问题 | 前端改为 `{ node_id, project_id }` |
+| BUG-052 | F16 AC3 | **严重** | `POST /api/snapshot/save`: 前端发 `{ nodeId, summary, selectedDimensions }`, 后端要 `{ node_id, project_id, summary, dimensions: [{ dimension_type_key, content }] }` → 422 + 字段结构不匹配 | 同上 | 前端改为 snake_case + 重构 dimensions 结构匹配 `DimensionSaveItem` schema |
+| BUG-053 | F15 AC4 | 中 | F13 需求分析和测试点生成完成后未写入 `activity_logs` 表，活动日志页看不到 AI 分析操作记录 | 分析走 FastAPI 端点，不走 Server Action，logActivity 调用遗漏 | 新增 `logActivityAuto()` (内部 requireAuth)，在 analysis page 保存回调中调用 |
+
+### 根因分析
+
+BUG-051/052 与 Phase 7 的 BUG-043~050 **同一根因**：Backend Agent 和 Frontend Agent 并行开发，snapshot 端点的 Phase 8 代码实际在 Phase 3 commit 中一起提交（`89eae64`），跳过了独立 QA 验证环节，导致契约不匹配问题在生产中存在但从未被发现。
+
+BUG-053 属于**跨架构边界遗漏**：Next.js Server Actions 内部的 CRUD 操作已正确接入 logActivity（11处调用），但 FastAPI 侧的 AI 分析端点走的是独立 HTTP 调用路径，不经过 Server Action 层，因此 logActivity 调用链断裂。
