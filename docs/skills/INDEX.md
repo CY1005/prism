@@ -4,22 +4,22 @@
 
 ## 开发类（Dev Skills）
 
-| Skill | 文件 | 触发条件 |
-|-------|------|----------|
-| 新增 AI 分析类端点 | [dev/new-ai-endpoint.md](dev/new-ai-endpoint.md) | 需要新增一个调用 LLM 的分析功能 |
-| 新增前后端联调功能 | [dev/frontend-backend-contract.md](dev/frontend-backend-contract.md) | 功能涉及前端调后端 API |
-| 新增数据库表 | [dev/new-db-table.md](dev/new-db-table.md) | 需要新增一张表 |
-| 开发闭环协议 | [dev/dev-closed-loop.md](dev/dev-closed-loop.md) | 每次开发任务开始/结束时 |
+| Skill | 文件 | 触发条件 | 验证项数 | 状态 |
+|-------|------|----------|---------|------|
+| 新增 AI 分析类端点 | [dev/new-ai-endpoint.md](dev/new-ai-endpoint.md) | 需要新增一个调用 LLM 的分析功能 | 8 | 活跃 |
+| 新增前后端联调功能 | [dev/frontend-backend-contract.md](dev/frontend-backend-contract.md) | 功能涉及前端调后端 API | 6 | 活跃 |
+| 新增数据库表 | [dev/new-db-table.md](dev/new-db-table.md) | 需要新增一张表 | 7 | 活跃 |
+| 开发闭环协议 | [dev/dev-closed-loop.md](dev/dev-closed-loop.md) | 每次开发任务开始/结束时 | 7 | 活跃 |
 
 ## 排错类（Debug Skills）
 
-| Skill | 文件 | 症状匹配 |
-|-------|------|----------|
-| 前后端契约漂移 | [debug/contract-drift.md](debug/contract-drift.md) | API 500 / 前端 undefined / 字段缺失 |
-| 空状态/边界值未处理 | [debug/empty-state.md](debug/empty-state.md) | 页面空白 / Cannot read properties of undefined |
-| AI 生成代码过时 API | [debug/stale-api.md](debug/stale-api.md) | TypeScript 编译错误 / Property does not exist |
-| 认证/权限漏洞 | [debug/auth-permission.md](debug/auth-permission.md) | 未登录可访问 / 权限绕过 |
-| 错误处理缺失 | [debug/silent-error.md](debug/silent-error.md) | 操作无反应 / 静默吞错 |
+| Skill | 文件 | 症状匹配 | 验证项数 | 状态 |
+|-------|------|----------|---------|------|
+| 前后端契约漂移 | [debug/contract-drift.md](debug/contract-drift.md) | API 500 / 前端 undefined / 字段缺失 | 7 | 活跃 |
+| 空状态/边界值未处理 | [debug/empty-state.md](debug/empty-state.md) | 页面空白 / Cannot read properties of undefined | 7 | 活跃 |
+| AI 生成代码过时 API | [debug/stale-api.md](debug/stale-api.md) | TypeScript 编译错误 / Property does not exist | 6 | 活跃 |
+| 认证/权限漏洞 | [debug/auth-permission.md](debug/auth-permission.md) | 未登录可访问 / 权限绕过 | 6 | 活跃 |
+| 错误处理缺失 | [debug/silent-error.md](debug/silent-error.md) | 操作无反应 / 静默吞错 | 7 | 活跃 |
 
 ## 使用方式
 

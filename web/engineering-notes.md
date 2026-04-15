@@ -107,3 +107,13 @@ docker exec prism-db-1 psql -U prism
 docker compose down -v && docker compose up -d
 # 然后重新 push + seed
 ```
+
+## 相关 Skills
+
+以下 Skills 包含更详细的排查步骤和代码示例：
+- [契约漂移排查](../docs/skills/debug/contract-drift.md)
+- [空状态排查](../docs/skills/debug/empty-state.md)
+- [过时 API 排查](../docs/skills/debug/stale-api.md)
+- [认证/权限排查](../docs/skills/debug/auth-permission.md)
+- [静默吞错排查](../docs/skills/debug/silent-error.md)
+- [Skills 总索引](../docs/skills/INDEX.md)

@@ -129,6 +129,13 @@ docs/                         # 项目文档
 - [auth-permission](docs/skills/debug/auth-permission.md) — 未登录可访问 / 权限绕过
 - [silent-error](docs/skills/debug/silent-error.md) — 操作无反应 / 静默吞错
 
+### Skills 使用规则
+
+1. **开发前**：匹配触发条件 → 读对应 Skill → 跑 Preflight Checklist
+2. **开发中**：到达执行检查点时暂停验证
+3. **开发后**：逐项完成验证段的检查 → 如有新发现触发改进 → 更新 Skill 文件的 `last_updated`
+4. **验证脚本**：`bash scripts/validate-skills.sh` 检查所有 Skill 结构完整性
+
 ## AI Provider 体系（ADR-004）
 
 ```python

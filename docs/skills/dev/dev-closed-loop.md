@@ -151,3 +151,29 @@ last_updated: 2026-04-15
 - **engineering-notes 降低编码负荷**：已知陷阱不用"想起来"，读文件就行
 - **反思模板降低沉淀负荷**：不用"想怎么写"，填模板就行
 - **CLAUDE.md 降低上下文负荷**：每次新对话自动加载，不用重复交代背景
+
+## 验证
+
+- [ ] Preflight Checklist 5 项全部跑完（未跳过任何一项）
+- [ ] Bug 修复后 `bug-log.md` 已追加条目
+- [ ] Blameless 5 Whys 至少追问到 Why 3（找到系统性根因）
+- [ ] 回流目标文件已更新（engineering-notes / CLAUDE.md / ADR）
+- [ ] 回流的规则在下次对话中会被自动读取（确认在 CLAUDE.md 或 engineering-notes 中）
+- [ ] YWT 反思已完成（Y/W/T 三项均非空）
+- [ ] 如果 W 中有值得沉淀的内容，已写入 engineering-notes.md
+
+## 执行检查点
+
+1. **开发任务启动时**：Preflight Checklist 全部打勾后才开始写代码
+2. **Bug 修复后**：立即执行沉淀流程（Phase 2），不攒到最后
+3. **同一文件编辑 >3 次时**：暂停，启动 Blameless 5 Whys 分析为什么反复修改
+4. **开发任务结束时**：执行 YWT 反思（Phase 4），不跳过
+
+## 改进触发器
+
+- Preflight Checklist 漏掉了某类检查（本该拦住的 Bug 漏网）→ 追加检查项
+- 5 Whys 模板不够用（某类 Bug 的根因链超过 5 层）→ 扩展模板
+- 回流路由表缺少新的根因类型 → 补充 Phase 2 ④ 的路由表
+- Kata 审计发现 Top 1 模式未改善 → Review 整个闭环流程
+- 本 Skill 连续 3 次使用无新发现 → 标记为"稳定"
+- 上次更新超过 30 天且有新 Bug 属于本模式 → 强制 Review
