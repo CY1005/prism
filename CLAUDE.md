@@ -112,6 +112,143 @@ docs/                         # 项目文档
 - **物化路径**: nodes 的 `path` 字段存储层级路径，支持 O(1) 面包屑查询
 - **活动日志**: 重要变更操作使用 fire-and-forget 方式记录 activity_log
 
+## 开发 Skill 模板（高频任务标准流程）
+
+> 从 99 个 Bug 和实际开发经验中提炼。每次开发前对照执行。
+
+### Skill: 新增 AI 分析类端点
+
+触发：需要新增一个调用 LLM 的分析功能
+
+```
+1. api/schemas/xxx.py    — 定义 Request/Response Pydantic 模型
+2. api/services/xxx.py   — 业务逻辑，调用 get_provider(ai_provider, api_key)
+3. api/routers/xxx.py    — 路由，SSE 流式用 StreamingResponse
+4. api/main.py           — app.include_router() 注册，选对 prefix
+5. web/src/services/xxx.ts  — 前端 API 客户端（fetchJson/postJson）
+6. web/src/actions/xxx.ts   — Server Action，标记 "use server"
+7. web/src/app/.../page.tsx — 页面组件
+```
+
+陷阱（来自 BUG-043~062）：
+- SSE 格式必须是 `event: chunk\ndata: {...}\n\n`，不是纯 JSON
+- Provider 降级：无 API key → MockProvider，**不要报错**
+- 大文本截断：AI prompt 中每个文档限 5000 字符
+- **Server Action 必须加认证**：`const user = await requireAuth()`（BUG-095）
+- **新端点必须加认证**：`Depends(require_user)`（BUG-075、BUG-080）
+
+### Skill: 新增前后端联调功能
+
+触发：功能涉及前端调后端 API
+
+```
+1. 后端先行：定义 Pydantic Schema（Contract-first）
+2. 前端跟进：TypeScript 类型必须与 Pydantic 字段一一对应
+3. 字段名规则：后端 snake_case → 前端 camelCase
+4. 验证对齐：逐字段检查，不靠"看起来差不多"
+```
+
+陷阱（PAIN-001，8 个 Bug 的根因）：
+- **绕过 Server Action 直接 fetch 是禁止的**（BUG-054~062 的共同根因）
+- 前端组件**不得自定义响应类型**，必须从 `services/` 导入（BUG-055~058）
+- JSONB 字段的前端渲染**必须校验结构**（BUG-020、BUG-083）
+
+### Skill: 新增数据库表
+
+触发：需要新增一张表
+
+```
+1. web/src/db/schema.ts  — Drizzle 定义（单一真相源）
+2. DATABASE_URL=... npx drizzle-kit push
+3. api/models/tables.py  — SQLAlchemy 镜像，必须 extend_existing=True
+4. 如果 FastAPI 写入该表 → 在 tables.py 文件头注释中说明
+```
+
+陷阱：
+- `text()` 返回 string 不是联合类型 → 组件入口处 `as` 断言（BUG-027）
+- JSONB 字段定义用 `jsonb("xxx").$type<YourType>()`，渲染前必须防御检查
+- drizzle-kit 不读 .env.local → 必须手动传 DATABASE_URL 前缀（BUG-085）
+- 新增列时检查 ORM 列名与 DB 列名是否一致（BUG-070）
+
+## 排错 Skill 模板（Top 5 Bug 模式 + 排查路径）
+
+> 基于 99 个 Bug 的模式统计。遇到问题时先匹配模式再排查。
+
+### 模式 #1：前后端契约漂移（出现频率最高）
+
+症状：API 返回 500 / 前端 undefined / 字段缺失
+
+```
+排查路径：
+1. 比对 api/schemas/ 的 Pydantic 字段 vs web/src/services/ 的 TS 类型
+2. 检查 snake_case ↔ camelCase 转换
+3. 检查前端是否绕过 Server Action 直接 fetch（禁止行为）
+4. 检查前端组件是否自定义了响应类型（应从 services/ 导入）
+5. 检查 JSONB 字段的结构是否一致
+```
+
+来源：BUG-043~050（8个）、BUG-054~062（9个）、BUG-066、BUG-070、BUG-082
+
+### 模式 #2：空状态 / 边界值未处理
+
+症状：页面空白 / Cannot read properties of undefined / 组件不渲染
+
+```
+排查路径：
+1. 数据是否为空数组/null/undefined？→ 加 fallback 渲染
+2. useTransition 期间旧数据和新 UI 是否错配？→ 渲染前校验 selectedId
+3. JSONB content 是否假设了结构？→ 开头加 if (!Array.isArray(x)) return
+4. Server Action 是否正确 await？→ 检查 async/await 链
+5. revalidatePath() 是否在变更后调用？→ 确认 ISR 刷新
+```
+
+来源：BUG-020~026、BUG-033~036、BUG-067、BUG-072、BUG-092
+
+### 模式 #3：AI 生成代码使用过时 API
+
+症状：TypeScript 编译错误 / Property does not exist / 运行时类型不匹配
+
+```
+排查路径：
+1. 检查 shadcn/ui 组件：是否用了 asChild？（禁止）
+2. 检查 Zod：error.errors → error.issues（v3→v4 breaking change）
+3. 检查 Select：onValueChange 签名是否含 null（base-ui 新签名）
+4. 检查 Next.js：params 是否需要 await（App Router 变更）
+5. 通用规则：AI 生成 UI 代码后**立即跑 tsc --noEmit**
+```
+
+来源：BUG-027~032（46个编译错误）、BUG-087
+
+### 模式 #4：认证 / 权限漏洞
+
+症状：未登录可访问 / 低权限可执行高权限操作 / 401 变 422
+
+```
+排查路径：
+1. 新端点是否加了 Depends(require_user)？（BUG-075）
+2. Server Action 是否调了 requireAuth()？（BUG-095）
+3. 权限检查是否用了 checkProjectAccess(userId, projectId, 'editor')？（BUG-076）
+4. 认证失败是否返回 401 而非 422？（BUG-080）
+5. 用 Viewer 角色测试一遍所有写操作
+```
+
+来源：BUG-075、BUG-076、BUG-080、BUG-095
+
+### 模式 #5：错误处理缺失 / 静默吞错
+
+症状：操作无反应 / 用户不知道成功还是失败 / 500 错误无提示
+
+```
+排查路径：
+1. catch 块是否吞掉了错误？→ 至少 console.error + 用户提示（BUG-098）
+2. 成功操作是否有视觉反馈？→ toast/状态变化（BUG-099）
+3. DB 异常是否返回 503？→ 包装 try-except（BUG-081）
+4. 非法参数是否返回 422 而非 500？→ UUID 格式校验（BUG-077）
+5. 软删除后查询是否过滤？→ WHERE deleted_at IS NULL（BUG-078）
+```
+
+来源：BUG-077、BUG-078、BUG-081、BUG-084、BUG-086、BUG-098、BUG-099
+
 ## AI Provider 体系（ADR-004）
 
 ```python

@@ -218,6 +218,25 @@ def _build_context(db: Session, req: RequirementAnalysisRequest) -> tuple[str, s
 
     context_str = "\n".join(context_parts)
 
+    # F21: match relevant analysis templates and inject as context
+    matched_template_id = None
+    try:
+        from api.services.template_manager import match_templates, inject_template, record_usage
+        from api.models.tables import AnalysisTemplate as ATModel
+
+        matches = match_templates(db, req.project_id, req.requirement_text, limit=1)
+        if matches and float(matches[0].get("similarity", 0)) > 0.35:
+            tpl = db.query(ATModel).filter(ATModel.id == matches[0]["template_id"]).first()
+            if tpl:
+                template_context = inject_template(tpl)
+                # Inject as prefix to context (User Message, not System Prompt)
+                context_str = template_context + "\n---\n\n" + context_str
+                matched_template_id = str(tpl.id)
+                record_usage(db, tpl.id)
+                logger.info(f"F21: injected template '{tpl.name}' (sim={matches[0]['similarity']})")
+    except Exception as e:
+        logger.warning(f"F21 template matching skipped: {e}")
+
     prompt = (
         f"你是一个专业的产品需求分析师。请对以下需求进行{req.analysis_level}级别的分析。\n\n"
         f"## 需求文本\n{req.requirement_text}\n\n"
@@ -229,7 +248,7 @@ def _build_context(db: Session, req: RequirementAnalysisRequest) -> tuple[str, s
         f"请用Markdown格式输出分析结果。"
     )
 
-    return prompt, context_str
+    return prompt, context_str, matched_template_id
 
 
 @router.post("/analyze/requirement")
@@ -241,7 +260,7 @@ async def analyze_requirement_stream(
     project = _get_project(db, req.project_id)
     provider = get_provider(project.ai_provider or "mock", project.ai_api_key_enc)
 
-    prompt, context_str = _build_context(db, req)
+    prompt, context_str, matched_template_id = _build_context(db, req)
 
     async def event_stream():
         full_text = []
@@ -263,6 +282,7 @@ async def analyze_requirement_stream(
                         "model": project.ai_provider or "mock",
                         "level": req.analysis_level,
                         "analysis_time_ms": elapsed_ms,
+                        "matched_template_id": matched_template_id,
                     },
                 },
                 ensure_ascii=False,

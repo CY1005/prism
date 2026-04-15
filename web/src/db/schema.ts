@@ -400,3 +400,51 @@ export const teamMembers = pgTable(
   },
   (t) => [unique().on(t.teamId, t.userId)],
 );
+
+// ─── Analysis Templates (F21 分析模板 / 自学习) ──────
+
+export const analysisTemplates = pgTable("analysis_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("general"), // 'functional' | 'performance' | 'security' | 'general'
+  content: jsonb("content").$type<{
+    triggerConditions: string[];
+    analysisSteps: string[];
+    pitfalls: string[];
+    verification: string[];
+    promptTemplate: string;
+  }>().notNull(),
+  version: integer("version").notNull().default(1),
+  usageCount: integer("usage_count").notNull().default(0),
+  lastUsedAt: timestamp("last_used_at"),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+});
+
+// ─── Template Versions (F21 模板版本历史) ────────────
+
+export const templateVersions = pgTable(
+  "template_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => analysisTemplates.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    content: jsonb("content").notNull(),
+    changeSummary: text("change_summary"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.templateId, t.versionNumber)],
+);

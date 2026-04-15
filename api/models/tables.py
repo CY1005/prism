@@ -373,3 +373,40 @@ class TeamMember(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(Text, nullable=False, default="member")
     joined_at = Column(DateTime, server_default=func.now())
+
+
+# ─── Analysis Templates (F21 分析模板 / 自学习) ─────
+# FastAPI 可读写此表
+
+class AnalysisTemplate(Base):
+    __tablename__ = "analysis_templates"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    name = Column(Text, nullable=False)
+    description = Column(Text)
+    category = Column(Text, nullable=False, default="general")
+    content = Column(JSONB, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    usage_count = Column(Integer, nullable=False, default=0)
+    last_used_at = Column(DateTime)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now())
+    deleted_at = Column(DateTime)
+
+
+# ─── Template Versions (F21 模板版本历史) ────────────
+
+class TemplateVersion(Base):
+    __tablename__ = "template_versions"
+    __table_args__ = TABLE_ARGS
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("analysis_templates.id", ondelete="CASCADE"), nullable=False)
+    version_number = Column(Integer, nullable=False)
+    content = Column(JSONB, nullable=False)
+    change_summary = Column(Text)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
