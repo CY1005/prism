@@ -22,11 +22,12 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { detailStrings, recentUpdates } from "@/lib/project-detail-data"
-import { openclawStrings, openclawRecentUpdates } from "@/lib/openclaw-data"
-import { getProjectStats, getProjectTreeOverview, type ProjectStats, type TreeNodeOverview } from "@/services/project-stats"
+import { type ProjectStats, type TreeNodeOverview } from "@/services/project-stats"
 import { getPanoramaData, getProjectStats as getPanoramaStats } from "@/actions/panorama"
 import { getActivityLogs } from "@/actions/activity-log"
+import { getProject } from "@/actions/projects"
+import { getSessionUser } from "@/actions/auth"
+import { getProjectStatsAction, getProjectTreeOverviewAction } from "@/actions/project-stats-proxy"
 import {
   getFeedItems,
   getFeedSources,
@@ -65,6 +66,50 @@ function treeToLayers(tree: TreeNodeOverview[]) {
   }))
 }
 
+function RecentUpdatesSidebar({ projectId }: { projectId: string }) {
+  const [logs, setLogs] = useState<{ id: string; summary: string; createdAt: string | Date }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getActivityLogs(projectId, 1, 5).then((r) => {
+      setLogs(r.logs as typeof logs)
+      setLoading(false)
+    })
+  }, [projectId])
+
+  return (
+    <Card className="w-[280px] border-border/60 p-4 shadow-sm">
+      <h3 className="mb-4 font-medium text-foreground">最近更新</h3>
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          加载中...
+        </div>
+      ) : logs.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4">暂无更新记录</p>
+      ) : (
+        <div className="space-y-0">
+          {logs.map((log, index) => {
+            const time = typeof log.createdAt === "string" ? new Date(log.createdAt) : log.createdAt
+            const timeStr = time instanceof Date && !isNaN(time.getTime())
+              ? time.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })
+              : ""
+            return (
+              <div key={log.id}>
+                <div className="py-3">
+                  <p className="text-sm text-foreground">{log.summary}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{timeStr}</p>
+                </div>
+                {index < logs.length - 1 && <Separator />}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 export default function ProjectOverviewPage() {
   const params = useParams()
   const projectId = params.projectId as string
@@ -79,6 +124,9 @@ export default function ProjectOverviewPage() {
   const [activeSubTab, setActiveSubTab] = useState<"treemap" | "tree">("treemap")
   const [panoramaData, setPanoramaData] = useState<Awaited<ReturnType<typeof getPanoramaData>> | null>(null)
   const [panoramaLoading, setPanoramaLoading] = useState(true)
+  const [projectName, setProjectName] = useState("")
+  const [userName, setUserName] = useState("")
+  const [userInitials, setUserInitials] = useState("")
   const [panoramaStats, setPanoramaStatsData] = useState<{
     totalModules: number
     totalFeatures: number
@@ -173,15 +221,26 @@ export default function ProjectOverviewPage() {
   const feedPendingCount = feedItemsList.filter((i) => i.status === "pending").length
 
   useEffect(() => {
+    // Load project name and user info
+    getProject(projectId).then((p) => {
+      if (p) setProjectName(p.name)
+    })
+    getSessionUser().then((u) => {
+      if (u) {
+        setUserName(u.name)
+        setUserInitials(u.name.charAt(0))
+      }
+    })
+
     setStatsLoading(true)
-    getProjectStats(projectId).then((r) => {
+    getProjectStatsAction(projectId).then((r) => {
       setStatsLoading(false)
       if (r.ok) setRealStats(r.data)
       else setApiError(r.error)
     })
 
     setTreeLoading(true)
-    getProjectTreeOverview(projectId).then((r) => {
+    getProjectTreeOverviewAction(projectId).then((r) => {
       setTreeLoading(false)
       if (r.ok) setRealTree(r.data.tree)
       else setApiError((prev) => prev ?? r.error)
@@ -222,9 +281,6 @@ export default function ProjectOverviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showActivityLog])
 
-  const isOpenClaw = projectId === "2"
-  const strings = isOpenClaw ? openclawStrings : detailStrings
-
   // Stats: real data only; show loading/error states in render
   const statsData = realStats
     ? {
@@ -238,13 +294,6 @@ export default function ProjectOverviewPage() {
 
   // Layers: use real tree data when available
   const layers = realTree ? treeToLayers(realTree) : null
-
-  // Recent updates: no real API yet — TODO: replace with real API when available
-  const updates = isOpenClaw ? openclawRecentUpdates : recentUpdates
-
-  const projectTypeBadge = isOpenClaw
-    ? { label: "系统架构", color: "border-green-200 text-green-700 bg-green-50" }
-    : { label: "产品分析", color: "border-blue-200 text-blue-700 bg-blue-50" }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -263,9 +312,9 @@ export default function ProjectOverviewPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{strings.userInitials}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-foreground">{strings.userName}</span>
+            <span className="text-sm text-foreground">{userName}</span>
           </div>
           <Link href="/login" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
             <LogOut className="h-4 w-4 text-muted-foreground" />
@@ -277,17 +326,14 @@ export default function ProjectOverviewPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/projects">{strings.myProjects}</BreadcrumbLink>
+              <BreadcrumbLink href="/projects">我的项目</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
               <BreadcrumbPage className="flex items-center gap-2">
-                {strings.projectName}
-                <Badge variant="outline" className={`text-xs ${projectTypeBadge.color}`}>
-                  {projectTypeBadge.label}
-                </Badge>
+                {projectName || "加载中..."}
               </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
@@ -298,8 +344,8 @@ export default function ProjectOverviewPage() {
         <Link href={`/projects/${projectId}/overview`} className="border-b-2 border-primary text-primary font-medium pb-3 pt-2 text-sm">
           全景图
         </Link>
-        <Link href={isOpenClaw ? `/openclaw` : `/projects/${projectId}/product-lines/private-cloud`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
-          {isOpenClaw ? "系统层" : "产品线"}
+        <Link href={`/projects/${projectId}/product-lines/private-cloud`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
+          产品线
         </Link>
         <Link href={`/projects/${projectId}/analysis`} className="text-muted-foreground hover:text-foreground pb-3 pt-2 text-sm">
           需求工作台
@@ -359,25 +405,25 @@ export default function ProjectOverviewPage() {
                 <span className="text-2xl font-bold text-foreground">
                   {isEmptyProject ? "0" : (statsData?.line1 ?? "—")}
                 </span>
-                <p className="text-sm text-muted-foreground">{strings.productLine}</p>
+                <p className="text-sm text-muted-foreground">产品线</p>
               </Card>
               <Card className="border-border/60 p-4 shadow-sm">
                 <span className="text-2xl font-bold text-foreground">
                   {isEmptyProject ? "0" : (statsData?.line2 ?? "—")}
                 </span>
-                <p className="text-sm text-muted-foreground">{strings.modules}</p>
+                <p className="text-sm text-muted-foreground">功能模块</p>
               </Card>
               <Card className="border-border/60 p-4 shadow-sm">
                 <span className="text-2xl font-bold text-foreground">
                   {isEmptyProject ? "0" : (statsData?.line3 ?? "—")}
                 </span>
-                <p className="text-sm text-muted-foreground">{strings.features}</p>
+                <p className="text-sm text-muted-foreground">功能项</p>
               </Card>
               <Card className="border-border/60 p-4 shadow-sm">
                 <span className="text-2xl font-bold text-foreground">
                   {isEmptyProject ? "0%" : (statsData?.line4 ?? "—")}
                 </span>
-                <p className="text-sm text-muted-foreground">{strings.avgCompletion}</p>
+                <p className="text-sm text-muted-foreground">平均完善度</p>
                 <Progress value={isEmptyProject ? 0 : (statsData?.avgPercent ?? 0)} className="mt-2 h-2" />
               </Card>
             </>
@@ -439,7 +485,7 @@ export default function ProjectOverviewPage() {
                 setCsvModalOpen(open)
                 if (!open) {
                   setTreeLoading(true)
-                  getProjectTreeOverview(projectId).then((r) => {
+                  getProjectTreeOverviewAction(projectId).then((r) => {
                     setTreeLoading(false)
                     if (r.ok) {
                       setRealTree(r.data.tree)
@@ -541,7 +587,7 @@ export default function ProjectOverviewPage() {
                       {line.modules.map((module, index) => (
                         <div key={module.name} className="flex flex-col items-center">
                           {index > 0 && <div className="h-2 w-px bg-border" />}
-                          <Link href={isOpenClaw ? "/openclaw" : "/"} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer">
+                          <Link href="/" className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer">
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${getStatusColor(module.completion)}`}
                             />
@@ -563,29 +609,7 @@ export default function ProjectOverviewPage() {
           </Card>
         )}
 
-        <Card className="w-[280px] border-border/60 p-4 shadow-sm">
-          <h3 className="mb-4 font-medium text-foreground">{strings.recentUpdates}</h3>
-          <div className="space-y-0">
-            {updates.map((update, index) => (
-              <div key={index}>
-                <div className="flex gap-3 py-3">
-                  <Avatar className="h-6 w-6 shrink-0">
-                    <AvatarFallback className="bg-muted text-xs">
-                      {update.user}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-foreground">
-                      {update.user} {update.action}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{update.time}</p>
-                  </div>
-                </div>
-                {index < updates.length - 1 && <Separator />}
-              </div>
-            ))}
-          </div>
-        </Card>
+        <RecentUpdatesSidebar projectId={projectId} />
       </div>
 
       {/* F14: Feed Panel */}

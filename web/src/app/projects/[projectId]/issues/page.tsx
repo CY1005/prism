@@ -42,7 +42,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { detailStrings } from "@/lib/project-detail-data"
+import { usePageContext } from "@/lib/use-page-context"
 import { createIssue, getIssuesByNode, getIssuesByCategory, deleteIssue } from "@/actions/issues"
 import { useProjectRole } from "@/contexts/project-role-context"
 import {
@@ -56,6 +56,7 @@ export default function IssuesPage() {
   const params = useParams()
   const projectId = params.projectId as string
   const { isViewer } = useProjectRole()
+  const { projectName, userName, userInitials } = usePageContext(projectId)
   const [isPending, startTransition] = useTransition()
 
   const [issues, setIssues] = useState<Issue[]>([])
@@ -123,9 +124,9 @@ export default function IssuesPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{detailStrings.userInitials}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-foreground">{detailStrings.userName}</span>
+            <span className="text-sm text-foreground">{userName}</span>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
             <Link href="/login">
@@ -140,13 +141,13 @@ export default function IssuesPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/projects">{detailStrings.myProjects}</BreadcrumbLink>
+              <BreadcrumbLink href="/projects">我的项目</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbLink href={`/projects/${projectId}`}>{detailStrings.projectName}</BreadcrumbLink>
+              <BreadcrumbLink href={`/projects/${projectId}`}>{projectName || "加载中..."}</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />

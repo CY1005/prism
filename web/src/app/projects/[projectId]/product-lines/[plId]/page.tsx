@@ -26,7 +26,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { productLinesData } from "@/lib/product-line-data"
-import { detailStrings } from "@/lib/project-detail-data"
+import { usePageContext } from "@/lib/use-page-context"
 import { cn } from "@/lib/utils"
 
 function getStatusColor(percent: number) {
@@ -46,6 +46,7 @@ export default function ProductLineOverviewPage() {
   const params = useParams()
   const projectId = params.projectId as string
   const plId = params.plId as string
+  const { projectName, userName, userInitials } = usePageContext(projectId)
 
   const productLine = productLinesData[plId] || productLinesData["private-cloud"]
 
@@ -71,9 +72,9 @@ export default function ProductLineOverviewPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{detailStrings.userInitials}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-foreground">{detailStrings.userName}</span>
+            <span className="text-sm text-foreground">{userName}</span>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
             <Link href="/login">
@@ -88,13 +89,13 @@ export default function ProductLineOverviewPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/projects">{detailStrings.myProjects}</BreadcrumbLink>
+              <BreadcrumbLink href="/projects">我的项目</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbLink href={`/projects/${projectId}/overview`}>{detailStrings.projectName}</BreadcrumbLink>
+              <BreadcrumbLink href={`/projects/${projectId}/overview`}>{projectName || "加载中..."}</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />

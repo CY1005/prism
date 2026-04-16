@@ -45,7 +45,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { detailStrings } from "@/lib/project-detail-data"
+import { usePageContext } from "@/lib/use-page-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AnalysisResult } from "@/components/analysis-result"
 import {
@@ -103,6 +103,7 @@ export default function AnalysisPage() {
   const projectId = params.projectId as string
   const initialNodeId = searchParams.get("nodeId") || ""
 
+  const { projectName, userName, userInitials } = usePageContext(projectId)
   const [requirementText, setRequirementText] = useState("")
   const [nodeId, setNodeId] = useState(initialNodeId)
   const [provider, setProvider] = useState("default")
@@ -421,9 +422,9 @@ export default function AnalysisPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-muted text-sm">{detailStrings.userInitials}</AvatarFallback>
+              <AvatarFallback className="bg-muted text-sm">{userInitials || "?"}</AvatarFallback>
             </Avatar>
-            <span className="text-sm text-foreground">{detailStrings.userName}</span>
+            <span className="text-sm text-foreground">{userName}</span>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
             <Link href="/login">
@@ -438,13 +439,13 @@ export default function AnalysisPage() {
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbLink href="/projects">{detailStrings.myProjects}</BreadcrumbLink>
+              <BreadcrumbLink href="/projects">我的项目</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
             </BreadcrumbSeparator>
             <BreadcrumbItem>
-              <BreadcrumbLink href={`/projects/${projectId}`}>{detailStrings.projectName}</BreadcrumbLink>
+              <BreadcrumbLink href={`/projects/${projectId}`}>{projectName || "加载中..."}</BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator>
               <ChevronRight className="h-4 w-4" />
