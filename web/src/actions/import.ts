@@ -8,6 +8,7 @@ import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
 import { logActivity } from "./activity-log";
 
 // ─── Auto-create modules from ZIP structure ──────────
@@ -174,7 +175,7 @@ export async function uploadZip(
         new AppError(
           body.detail || "上传失败",
           "blocking",
-          "UPLOAD_FAILED",
+          ErrorCode.INTERNAL_ERROR,
           res.status,
         ),
       );

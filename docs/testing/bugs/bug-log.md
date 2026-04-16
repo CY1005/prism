@@ -2088,3 +2088,88 @@ const selected = mappingRows.filter((r) => r.selected && r.targetNodeId);
 1. **空状态是功能的第一个用户**：新项目的首次导入是最常见的入口路径，但开发时总是先有测试数据。`> 50% 的 bug 来自空状态`（CLAUDE.md 中的规则）在这里再次应验。
 2. **流程设计要考虑冷启动**：导入 → 需要模块 → 模块从哪来？如果答案是"用户手动创建"，那就多了一个不必要的步骤。好的流程应该让数据自己"长出"结构。
 3. **ZIP 的目录结构本身就是最好的模块初始化来源**：用户组织文件时已经按模块分目录了，导入时应该尊重这个结构，而不是要求用户再手动建一遍。
+
+---
+
+## BUG-110: 登录态失效时创建项目降级为"操作失败"（错误类型漂移 + 静默吞错）
+
+**发现日期**: 2026-04-17
+**模式**: 契约漂移(#1) + 静默吞错(#5) 双模式叠加
+**严重程度**: 中（UX 失真，用户无法自救）
+
+### 现象
+
+用户在公网（Cloudflare Tunnel）点"创建项目"，前端弹窗显示"操作失败，请重试"。
+Server Action 返回：
+```json
+{"success":false,"error":"操作失败，请重试","code":"INTERNAL_ERROR","severity":"warning"}
+```
+
+但服务端日志实际是：
+```
+web-1 | Unexpected error: Error: UNAUTHORIZED
+```
+
+**用户视角的伤害**：看到"系统错误"以为是 bug，尝试刷新、重试、骂产品；真正该做的"重新登录"没被提示。
+
+### 根因（三层）
+
+**层 1（表面）**：用户的 Auth.js JWT session 失效（24h 过期 / Cloudflare Tunnel cookie 边界问题）。
+
+**层 2（错误体系漂移）**：
+- `src/lib/errors.ts` 定义了完整的 `AppError` 体系，包括 `Errors.UNAUTHORIZED = new AppError('请先登录', 'blocking', 'UNAUTHORIZED', 401)`
+- 但 `src/lib/auth.ts:143` 的 `requireAuth()` 写的是 `throw new Error("UNAUTHORIZED")`（原生 Error）
+- `actionError()` 通过 `instanceof AppError` 判断是否是预期错误 → 原生 Error 判断为 false → 降级为通用 `INTERNAL_ERROR / warning`
+- **401 Unauthorized 被静默改写为 500 Internal，severity 从 blocking 降到 warning**
+
+**层 3（VibeCoding 根因）**：这是 PAIN-001 契约漂移的**错误语义版本**。Agent A 设计了 AppError 体系，Agent B 写 auth 工具时用了最直觉的 `throw new Error("...")`，两个 Agent 没共享"所有业务错误必须用 `Errors.XXX` / `new AppError`"这条约束。AC 里只写了业务逻辑，没写"错误类型规范"。
+
+### 修复
+
+**一阶（错误抛出侧，根本修复）**：
+```ts
+// src/lib/auth.ts:143
+// Before
+throw new Error("UNAUTHORIZED");
+// After
+throw Errors.UNAUTHORIZED;
+```
+
+**同类隐患扫描**：全库 grep `throw new Error(` 在 `src/lib|actions|app|services` 下只剩 2 处，1 处已修，另 1 处 (`src/lib/crypto.ts:9`) 同样问题，同步修为 `new AppError(..., 'CONFIG_MISSING', 500)`。
+
+**二阶（UX 层，跨页面统一 TODO）**：
+- 示范点：`src/app/projects/new/page.tsx` — 收到 `code === "UNAUTHORIZED"` 时自动 `router.push('/login?from=...')`
+- TODO：其他 20+ 个调用 Server Action 的页面都应走统一 helper（如 `handleActionResult`），识别 UNAUTHORIZED 跳登录，识别 FORBIDDEN 提示权限不足等
+
+### 受影响文件
+
+- `web/src/lib/auth.ts`（改抛错方式 + 新增 Errors import）
+- `web/src/lib/crypto.ts`（改抛错方式 + 新增 AppError import）
+- `web/src/app/projects/new/page.tsx`（UNAUTHORIZED 跳 /login 示范）
+
+### 教训
+
+1. **"错误类型"也是契约的一部分**：并行开发时，field schema 漂移众所周知，但**错误的抛出类型/code/severity**同样是契约，Agent 之间必须共享。Agent 的 AC 模板里应强制：
+   > 所有业务错误必须 `throw Errors.XXX` 或 `new AppError(...)`，禁止 `throw new Error(...)` 在 src/lib|actions|services 下出现。
+2. **fallback catch 要带诊断信息，不要静默改写语义**：`actionError` 在走 fallback 时虽然打了 `console.error`，但**丢掉了**原错误的语义，前端拿到的 code 从 `UNAUTHORIZED` 变成 `INTERNAL_ERROR`。更好的做法：fallback 时保留 `error.message` 原文作为诊断字段返回（生产环境可脱敏），前端能根据特征降级处理。
+3. **UX 降级等于 bug**：把 401 "登录失效"显示成 "系统错误" 不是"友好提示"，是让用户无法自救。错误消息的准确性 = 用户能否自己解决问题。
+4. **这个 bug 能被发现，是因为真实使用**：155 测试点 100% 通过没发现它，因为测试环境 session 不会过期。**Dogfooding > 测试用例**在这种 UX 细节上成立。
+
+### 修复升级（同日）
+
+BUG-110 暴露了"错误类型字符串自由编造"的系统性风险，同日升级为工程治理：
+
+1. **新增 `web/src/lib/error-codes.ts`**：全局 ErrorCode const 枚举，所有 code 单一真相源
+2. **`AppError.code` 类型从 `string` 收紧为 `ErrorCode`**：tsc 立刻抓出 13 个自编 code（`TEMPLATE_LIST_ERROR` / `EXPORT_FAILED` 等），全部归并为 `ErrorCode.INTERNAL_ERROR`（message 保留细节）
+3. **新增 `web/src/lib/client-error.ts`**：`handleActionResult()` helper，按 code 分发 UX 行为（UNAUTHORIZED 自动跳 /login）
+4. **`projects/new/page.tsx` 接入新 helper**（示范点）
+5. **新增文档 `docs/architecture/error-codes.md`**：code 治理规则 + Agent 提示词约束 + 验证命令
+6. **CLAUDE.md 加规则**：`src/lib|actions|services` 下禁止 `throw new Error(...)`
+
+**可验证**：
+```bash
+cd web && npx tsc --noEmit   # 零错
+grep -rn "throw new Error(" src/lib src/actions src/services --include="*.ts"  # 零结果
+```
+
+**教训升级**：契约漂移不只靠 review 和规则拦截——**把 code 类型从 string 收紧为 enum，让类型系统当自动审查员**，一次性抓出 13 个历史遗留 rogue code。这是 Story 4 的种子。

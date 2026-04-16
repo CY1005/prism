@@ -3,6 +3,7 @@
 import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
 import type {
   LayerResult,
   GenerateTestPointsRequest,
@@ -37,7 +38,7 @@ export async function getAffectedNodes(
     if (!res.ok) {
       const body = await res.json().catch(() => ({ detail: "查询影响节点失败" }));
       return actionError(
-        new AppError(body.detail || "查询影响节点失败", "blocking", "AFFECTED_NODES_FAILED", res.status),
+        new AppError(body.detail || "查询影响节点失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
       );
     }
 

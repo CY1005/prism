@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { Errors } from "./errors";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -140,7 +141,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 export async function requireAuth() {
   const session = await auth();
   if (!session?.user?.id) {
-    throw new Error("UNAUTHORIZED");
+    throw Errors.UNAUTHORIZED;
   }
   return session.user as { id: string; email: string; name: string; role: string };
 }

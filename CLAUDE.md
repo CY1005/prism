@@ -100,6 +100,7 @@ docs/                         # 项目文档
 - **禁止裸端口暴露**: Docker 端口绑定 `127.0.0.1:port:port`
 - **禁止跳过 AC**: 没有验收标准不写代码
 - **禁止超长循环**: 同一文件 >6 次编辑 = 停下来重新思考
+- **禁止裸 throw new Error**: `src/lib|actions|services` 下业务错误必须 `throw Errors.XXX` 或 `new AppError(..., ErrorCode.XXX, ...)`，详见 [error-codes 治理](docs/architecture/error-codes.md)
 
 ### 必须的模式
 

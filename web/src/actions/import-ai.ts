@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
 import { logActivity } from "./activity-log";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8001";
@@ -115,7 +116,7 @@ export async function aiAnalyzeZip(
     if (!res.ok) {
       const body = await res.json().catch(() => ({ detail: "AI分析失败" }));
       return actionError(
-        new AppError(body.detail || "AI分析失败", "blocking", "AI_ANALYZE_FAILED", res.status),
+        new AppError(body.detail || "AI分析失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
       );
     }
 
@@ -196,7 +197,7 @@ export async function aiConfirmImport(
     if (!res.ok) {
       const body = await res.json().catch(() => ({ detail: "导入失败" }));
       return actionError(
-        new AppError(body.detail || "导入失败", "blocking", "AI_CONFIRM_FAILED", res.status),
+        new AppError(body.detail || "导入失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
       );
     }
 
@@ -267,7 +268,7 @@ export async function aiUndoImport(
     if (!res.ok) {
       const body = await res.json().catch(() => ({ detail: "撤销失败" }));
       return actionError(
-        new AppError(body.detail || "撤销失败", "blocking", "UNDO_FAILED", res.status),
+        new AppError(body.detail || "撤销失败", "blocking", ErrorCode.INTERNAL_ERROR, res.status),
       );
     }
 

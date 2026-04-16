@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { createProject } from "@/actions/projects"
+import { handleActionResult } from "@/lib/client-error"
 
 const templates = [
   {
@@ -66,10 +67,13 @@ export default function NewProjectPage() {
 
     startTransition(async () => {
       const result = await createProject(formData)
-      if (result.success) {
-        router.push(`/projects/${result.data.id}`)
-      } else {
-        setError(result.error)
+      const handled = handleActionResult(result, router, {
+        currentPath: "/projects/new",
+      })
+      if (handled.ok) {
+        router.push(`/projects/${handled.data.id}`)
+      } else if (!handled.autoHandled) {
+        setError(handled.message)
       }
     })
   }

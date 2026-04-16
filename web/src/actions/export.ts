@@ -9,6 +9,7 @@ import {
   actionSuccess,
   AppError,
 } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8001";
 
@@ -43,7 +44,7 @@ export async function exportNodes(
         new AppError(
           body.detail || "导出失败",
           "blocking",
-          "EXPORT_FAILED",
+          ErrorCode.INTERNAL_ERROR,
           res.status,
         ),
       );
@@ -90,7 +91,7 @@ export async function exportProject(
         new AppError(
           body.detail || "导出失败",
           "blocking",
-          "EXPORT_FAILED",
+          ErrorCode.INTERNAL_ERROR,
           res.status,
         ),
       );

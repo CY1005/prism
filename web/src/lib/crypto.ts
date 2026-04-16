@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { AppError } from './errors';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -6,7 +7,14 @@ const AUTH_TAG_LENGTH = 16;
 
 function getEncryptionKey(): Buffer {
   const key = process.env.AI_KEY_ENCRYPTION_SECRET;
-  if (!key) throw new Error('AI_KEY_ENCRYPTION_SECRET environment variable is not set');
+  if (!key) {
+    throw new AppError(
+      'AI 密钥加密服务未配置，请联系管理员',
+      'blocking',
+      'CONFIG_MISSING',
+      500,
+    );
+  }
   return Buffer.from(key, 'hex');
 }
 
