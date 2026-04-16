@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   allowedDevOrigins: ["108.187.32.122"],
   serverExternalPackages: ["postgres"],
   experimental: {

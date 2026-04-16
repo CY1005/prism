@@ -32,6 +32,41 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8001/health/\")'"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: ./web
+      args:
+        DATABASE_URL: postgresql://prism:prism_dev_2026@db:5432/prism
+        AUTH_SECRET: ${AUTH_SECRET}
+        NEXT_PUBLIC_ANALYZER_URL: https://api-prism.19911005.xyz
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      DATABASE_URL: postgresql://prism:prism_dev_2026@db:5432/prism
+      AUTH_SECRET: ${AUTH_SECRET}
+      AI_KEY_ENCRYPTION_SECRET: ${AI_KEY_ENCRYPTION_SECRET}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      API_URL: http://analyzer:8001
+      NEXT_PUBLIC_ANALYZER_URL: https://api-prism.19911005.xyz
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: https://prism.19911005.xyz
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   pgdata:

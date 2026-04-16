@@ -10,6 +10,8 @@ import {
   AppError,
 } from "@/lib/errors";
 
+const API_BASE = process.env.API_URL ?? "http://localhost:8001";
+
 // ─── exportNodes ─────────────────────────────────────
 
 export async function exportNodes(
@@ -26,7 +28,7 @@ export async function exportNodes(
       );
     }
 
-    const res = await fetch("http://localhost:8001/api/export/nodes", {
+    const res = await fetch(`${API_BASE}/api/export/nodes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -73,7 +75,7 @@ export async function exportProject(
     const user = await requireAuth();
     await checkProjectAccess(user.id, projectId, "viewer");
 
-    const res = await fetch("http://localhost:8001/api/export/project", {
+    const res = await fetch(`${API_BASE}/api/export/project`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

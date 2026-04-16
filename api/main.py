@@ -61,7 +61,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://web:3000", "https://prism.19911005.xyz", "https://api-prism.19911005.xyz"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

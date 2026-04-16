@@ -76,11 +76,11 @@ export async function listTemplates(
     const res = await fetchAPI(`/api/templates/?${params.toString()}`);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return actionError(new AppError(body.detail || "获取模板列表失败", "blocking"));
+      return actionError(new AppError(body.detail || "获取模板列表失败", "blocking", "TEMPLATE_LIST_ERROR"));
     }
     return actionSuccess(await res.json());
   } catch (e) {
-    return actionError(new AppError("获取模板列表失败", "blocking"));
+    return actionError(new AppError("获取模板列表失败", "blocking", "TEMPLATE_LIST_ERROR"));
   }
 }
 
@@ -91,11 +91,11 @@ export async function getTemplate(
     const res = await fetchAPI(`/api/templates/${templateId}`);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return actionError(new AppError(body.detail || "获取模板失败", "blocking"));
+      return actionError(new AppError(body.detail || "获取模板失败", "blocking", "TEMPLATE_GET_ERROR"));
     }
     return actionSuccess(await res.json());
   } catch (e) {
-    return actionError(new AppError("获取模板失败", "blocking"));
+    return actionError(new AppError("获取模板失败", "blocking", "TEMPLATE_GET_ERROR"));
   }
 }
 
@@ -113,11 +113,11 @@ export async function createTemplate(data: {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return actionError(new AppError(body.detail || "创建模板失败", "blocking"));
+      return actionError(new AppError(body.detail || "创建模板失败", "blocking", "TEMPLATE_CREATE_ERROR"));
     }
     return actionSuccess(await res.json());
   } catch (e) {
-    return actionError(new AppError("创建模板失败", "blocking"));
+    return actionError(new AppError("创建模板失败", "blocking", "TEMPLATE_CREATE_ERROR"));
   }
 }
 
@@ -138,11 +138,11 @@ export async function updateTemplate(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return actionError(new AppError(body.detail || "更新模板失败", "blocking"));
+      return actionError(new AppError(body.detail || "更新模板失败", "blocking", "TEMPLATE_UPDATE_ERROR"));
     }
     return actionSuccess(await res.json());
   } catch (e) {
-    return actionError(new AppError("更新模板失败", "blocking"));
+    return actionError(new AppError("更新模板失败", "blocking", "TEMPLATE_UPDATE_ERROR"));
   }
 }
 
@@ -155,11 +155,11 @@ export async function deleteTemplate(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return actionError(new AppError(body.detail || "删除模板失败", "blocking"));
+      return actionError(new AppError(body.detail || "删除模板失败", "blocking", "TEMPLATE_DELETE_ERROR"));
     }
     return actionSuccess(await res.json());
   } catch (e) {
-    return actionError(new AppError("删除模板失败", "blocking"));
+    return actionError(new AppError("删除模板失败", "blocking", "TEMPLATE_DELETE_ERROR"));
   }
 }
 
@@ -170,11 +170,11 @@ export async function getTemplateHistory(
     const res = await fetchAPI(`/api/templates/${templateId}/history`);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return actionError(new AppError(body.detail || "获取版本历史失败", "blocking"));
+      return actionError(new AppError(body.detail || "获取版本历史失败", "blocking", "TEMPLATE_HISTORY_ERROR"));
     }
     return actionSuccess(await res.json());
   } catch (e) {
-    return actionError(new AppError("获取版本历史失败", "blocking"));
+    return actionError(new AppError("获取版本历史失败", "blocking", "TEMPLATE_HISTORY_ERROR"));
   }
 }
 
@@ -189,10 +189,10 @@ export async function revertTemplate(
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return actionError(new AppError(body.detail || "回滚模板失败", "blocking"));
+      return actionError(new AppError(body.detail || "回滚模板失败", "blocking", "TEMPLATE_REVERT_ERROR"));
     }
     return actionSuccess(await res.json());
   } catch (e) {
-    return actionError(new AppError("回滚模板失败", "blocking"));
+    return actionError(new AppError("回滚模板失败", "blocking", "TEMPLATE_REVERT_ERROR"));
   }
 }

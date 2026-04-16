@@ -1651,3 +1651,166 @@ handleSaveAI() {
 ### 受影响文件
 
 - `web/src/app/projects/[projectId]/settings/page.tsx`
+
+---
+
+## BUG-100: templates.ts AppError 构造函数缺少 code 参数导致 production build 失败
+
+- **日期**: 2026-04-16
+- **严重度**: Critical (阻塞 Docker 构建)
+- **状态**: 已修复
+- **阶段**: Docker部署
+
+### 现象
+
+```
+Type error: Expected 3-4 arguments, but got 2.
+> 79 |       return actionError(new AppError(body.detail || "获取模板列表失败", "blocking"));
+```
+
+`npm run build`（Next.js production build）在 TypeScript 类型检查阶段失败，退出码 1。
+
+### 根因
+
+`AppError` 构造函数签名为 `(message, severity, code, statusCode?)`，需要3-4个参数。但 `templates.ts` 中所有14处调用只传了2个参数 `(message, severity)`，缺少必填的 `code` 参数。
+
+**推测成因**: `templates.ts` 是 F21 AI自学习功能新增的文件，由 VibeCoding Agent 生成时参考了旧版 `AppError`（只有2个参数的版本），没有与当前 `errors.ts` 的3参数签名对齐。dev 模式下 Next.js 不做全量 tsc 检查，所以开发时没有发现。
+
+### 修复
+
+为14处 `new AppError()` 调用补全第三个参数 `code`，使用语义化的错误码：
+- `TEMPLATE_LIST_ERROR`、`TEMPLATE_GET_ERROR`、`TEMPLATE_CREATE_ERROR`
+- `TEMPLATE_UPDATE_ERROR`、`TEMPLATE_DELETE_ERROR`
+- `TEMPLATE_HISTORY_ERROR`、`TEMPLATE_REVERT_ERROR`
+
+### 受影响文件
+
+- `web/src/actions/templates.ts`
+
+### 教训
+
+1. **dev模式不等于类型安全**: Next.js dev server 不执行完整 tsc 检查，VibeCoding 生成的代码在 dev 模式跑通不代表 production build 能过。应在 CI 或每次提交前运行 `tsc --noEmit`。
+2. **Agent 生成代码时的接口版本漂移**: 新文件引用已有类（如 AppError）时，Agent 可能基于训练数据中的旧签名生成代码。应在 Skill 中加入"新增 action 文件时检查 AppError 签名"的验证点。
+
+---
+
+## BUG-101: import.ts 和 export.ts 硬编码 localhost:8001 导致 Docker 容器间通信失败
+
+- **日期**: 2026-04-16
+- **严重度**: Major (Docker 环境功能不可用)
+- **状态**: 已修复
+- **阶段**: Docker部署
+
+### 现象
+
+Docker 容器化后，Server Actions 中的 import 和 export 功能无法调用 FastAPI 后端，因为容器内 `localhost:8001` 不是 analyzer 容器的地址。
+
+### 根因
+
+`import.ts` 和 `export.ts` 中硬编码了 `fetch("http://localhost:8001/api/...")`，没有使用环境变量。同项目其他 actions 文件（analyze.ts、templates.ts、import-ai.ts）都正确使用了 `process.env.API_URL ?? "http://localhost:8001"` 模式。
+
+**推测成因**: 这两个文件是不同 Phase 中由不同 Agent 写的，没有统一参考已有的 URL 配置模式。
+
+### 修复
+
+1. `import.ts`: 添加 `const apiBase = process.env.API_URL ?? "http://localhost:8001"`，替换硬编码
+2. `export.ts`: 添加 `const API_BASE = process.env.API_URL ?? "http://localhost:8001"`，替换2处硬编码
+3. `docker-compose.yml` 中 web 服务设置 `API_URL: http://analyzer:8001`
+
+### 受影响文件
+
+- `web/src/actions/import.ts`
+- `web/src/actions/export.ts`
+- `docker-compose.yml`
+
+### 教训
+
+VibeCoding 多 Phase 开发时，不同 Agent 生成的代码可能不遵循同一配置模式。应在 CLAUDE.md 或 Skill 中明确"所有 API 调用必须使用环境变量 `API_URL`，禁止硬编码 URL"的规则。可通过 `grep -r "localhost:8001" src/` 快速扫描。
+
+---
+
+## BUG-102: 项目列表页在无项目时显示4个 mock 项目，点击报 UUID 解析错误
+
+- **日期**: 2026-04-16
+- **严重度**: Major (误导用户 + 点击报错)
+- **状态**: 已修复
+- **阶段**: Docker部署
+
+### 现象
+
+1. 新数据库无项目数据，项目列表页显示4个假项目卡片
+2. 点击任一假项目进入详情页，报错 `PostgresError: invalid input syntax for type uuid: "1"`
+
+### 根因
+
+`projects/page.tsx` 第55行：
+```js
+if (r.ok && r.data.projects.length > 0) setApiProjects(r.data.projects)
+```
+
+当 API 返回空数组时，`apiProjects` 保持初始值 `null`，第84行 fallback 逻辑 `apiProjects ?? projectsData` 导致显示 `projectsData`（来自 `@/lib/projects-data`）中的 mock 数据。mock 项目的 ID 是 `"1"`~`"4"`（非 UUID），传到后端查询时 PostgreSQL 报类型错误。
+
+**推测成因**: 开发阶段为了让空数据库也有页面展示效果而加的 fallback，上线后应该移除但被遗忘了。
+
+### 修复
+
+移除 `projects.length > 0` 条件，API 返回空数组时也设置为真实数据（空列表）：
+```js
+if (r.ok) setApiProjects(r.data.projects)
+```
+
+### 受影响文件
+
+- `web/src/app/projects/page.tsx`
+
+### 教训
+
+Mock/placeholder 数据应有明确的清理时间点。VibeCoding 开发中，mock 数据方便了早期演示，但 fallback 逻辑应标记 `// TODO: remove before production`，或在 `NODE_ENV=production` 时禁用。
+
+---
+
+## BUG-103: 项目列表页客户端直调 FastAPI 在公网环境失败，mock 数据仍然显示
+
+- **日期**: 2026-04-16
+- **严重度**: Major (公网环境核心页面不可用)
+- **状态**: 已修复
+- **阶段**: Docker部署 / 公网上线
+
+### 现象
+
+BUG-102 修复后，localhost 环境 mock 消失，但部署到公网（`prism.19911005.xyz`）后 mock 数据再次出现。浏览器控制台显示对 `api-prism.19911005.xyz` 的请求被 Cloudflare Access 拦截（302 → login 页），即使移除 Access 保护后仍返回 `{"detail":"未登录"}`。
+
+### 根因
+
+三层叠加问题：
+
+1. **架构层**：`projects/page.tsx` 是 `"use client"` 组件，通过 `services/projects.ts` 的 `listProjects()` 在**浏览器端**直接 fetch FastAPI。本地开发时浏览器访问 `localhost:8001` 能通，但公网环境下浏览器的 localhost 是用户自己的电脑，不是服务器。
+
+2. **认证层**：即使通过 Cloudflare Tunnel 暴露了 `api-prism.19911005.xyz`，FastAPI 的 `get_projects` 路由需要 `require_user` 认证（Internal Token + User-Id header）。客户端 fetch 不带这些 header，返回 401。
+
+3. **fallback 层**：BUG-102 的修复只解决了"空数组 vs null"的判断，但没解决请求本身失败（`r.ok` 为 false）时 `apiProjects` 仍为 null 的问题。
+
+**为什么自测没测出来**：
+- localhost 自测时，浏览器和服务器在同一台机器，`localhost:8001` 可达且 FastAPI CORS 允许 `localhost:3000`
+- Docker 容器间通信测试（curl）走的是服务端，不经过浏览器
+- 缺少**跨环境验证**：没有在公网环境下用浏览器 F12 检查客户端请求是否成功
+- BUG-102 的修复只验证了"API 返回空数组"的 case，没有验证"API 请求本身失败"的 case
+
+### 修复
+
+将 `listProjects()`（客户端 fetch FastAPI）替换为已有的 Server Action `getProjects()`（服务端 Drizzle 直查数据库）：
+1. import 从 `@/services/projects` 改为 `@/actions/projects`
+2. 调用从 `listProjects().then(r => ...)` 改为 `getProjects().then(projects => ...)`
+3. 字段映射从 snake_case（FastAPI 返回）改为 camelCase（Drizzle 返回）
+4. 错误处理加 `.catch(() => setApiProjects([]))`
+
+### 受影响文件
+
+- `web/src/app/projects/page.tsx`
+
+### 教训
+
+1. **客户端组件不应直调内部微服务**：`"use client"` 组件的 fetch 在浏览器执行，公网部署后 `localhost` 不可达。应统一使用 Server Action 中转，这是 Next.js 的设计初衷。
+2. **自测必须覆盖目标环境**：localhost 测试通过 ≠ 公网测试通过。部署后应在真实公网环境用浏览器 F12 验证所有网络请求。
+3. **同一个 bug 可能有多层原因**：BUG-102 修了数据层（空数组判断），BUG-103 修了网络层（请求本身失败）。修 bug 时应追问"还有什么其他方式会导致同样的现象"。
+4. **项目中存在两套项目列表实现**（`services/projects.ts` 客户端版 + `actions/projects.ts` 服务端版），应清理冗余，保留 Server Action 版本。

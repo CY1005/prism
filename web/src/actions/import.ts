@@ -57,7 +57,8 @@ export async function uploadZip(
       );
     }
 
-    const res = await fetch("http://localhost:8001/api/import/upload", {
+    const apiBase = process.env.API_URL ?? "http://localhost:8001";
+    const res = await fetch(`${apiBase}/api/import/upload`, {
       method: "POST",
       body: (() => {
         const fd = new FormData();

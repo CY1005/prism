@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { projectsData, projectsStrings } from "@/lib/projects-data"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
-import { listProjects, type ProjectSummary } from "@/services/projects"
+import { getProjects } from "@/actions/projects"
 import { logout, getSessionUser } from "@/actions/auth"
 import { getTeams, getTeamProjects } from "@/actions/teams"
 
@@ -44,16 +44,16 @@ type TeamGroup = {
 }
 
 export default function ProjectsPage() {
-  const [apiProjects, setApiProjects] = useState<ProjectSummary[] | null>(null)
+  const [apiProjects, setApiProjects] = useState<Awaited<ReturnType<typeof getProjects>> | null>(null)
   const [userName, setUserName] = useState("")
   const [userInitials, setUserInitials] = useState("")
   const [activeTab, setActiveTab] = useState<ProjectTab>("personal")
   const [teamGroups, setTeamGroups] = useState<TeamGroup[]>([])
 
   useEffect(() => {
-    listProjects().then((r) => {
-      if (r.ok && r.data.projects.length > 0) setApiProjects(r.data.projects)
-    })
+    getProjects().then((projects) => {
+      setApiProjects(projects)
+    }).catch(() => setApiProjects([]))
     getSessionUser().then((user) => {
       if (user) {
         setUserName(user.name)
@@ -85,18 +85,18 @@ export default function ProjectsPage() {
     ? apiProjects.map((p) => ({
         id: p.id,
         title: p.name,
-        type: templateLabel[p.template_type] || p.template_type,
-        typeColor: templateColor[p.template_type] || "blue",
+        type: templateLabel[p.templateType] || p.templateType,
+        typeColor: templateColor[p.templateType] || "blue",
         description: p.description || "",
         stats: [
-          { value: p.total_nodes, label: "模块" },
-          { value: p.total_files, label: "功能项" },
-          { value: `${Math.round(p.avg_completion)}%`, label: "完善度" },
+          { value: p.nodeCount, label: "模块" },
+          { value: 0, label: "功能项" },
+          { value: "0%", label: "完善度" },
         ],
-        lastUpdated: p.created_at ? new Date(p.created_at).toLocaleDateString("zh-CN") : "",
-        members: ["陈"],
+        lastUpdated: p.createdAt ? new Date(p.createdAt).toLocaleDateString("zh-CN") : "",
+        members: ["CY"],
       }))
-    : projectsData
+    : []
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
