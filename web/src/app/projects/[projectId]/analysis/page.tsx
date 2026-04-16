@@ -49,17 +49,72 @@ import { usePageContext } from "@/lib/use-page-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AnalysisResult } from "@/components/analysis-result"
 import {
-  analyzeRequirementStream,
-  generateTestPointsAI,
-  saveAnalysis,
-  saveTestPoints,
   type AnalysisLevel,
   type LayerResult,
   type StreamChunk,
+  type StreamAnalyzeRequest,
   type GenerateTestPointsResponse,
   type AITestPoint,
 } from "@/services/analyzer"
+import {
+  saveAnalysisAction,
+  generateTestPointsAIAction,
+  saveTestPointsAction,
+} from "@/actions/analyze"
 import { logActivityAuto } from "@/actions/activity-log"
+
+/** SSE streaming via internal proxy route instead of direct FastAPI call */
+function analyzeRequirementStream(
+  req: StreamAnalyzeRequest,
+  onChunk: (chunk: StreamChunk) => void,
+  onError: (error: string) => void,
+  onDone: () => void,
+): AbortController {
+  const controller = new AbortController();
+  (async () => {
+    try {
+      const resp = await fetch("/api/analyze/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+        signal: controller.signal,
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        onError(`HTTP ${resp.status}: ${text}`);
+        return;
+      }
+      const reader = resp.body?.getReader();
+      if (!reader) { onError("无法读取响应流"); return; }
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          const jsonStr = trimmed.slice(6);
+          if (jsonStr === "[DONE]") { onDone(); return; }
+          try {
+            const chunk = JSON.parse(jsonStr) as StreamChunk;
+            onChunk(chunk);
+            if (chunk.type === "done") { onDone(); return; }
+          } catch { /* skip malformed */ }
+        }
+      }
+      onDone();
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") {
+        onError(`分析服务不可用: ${(e as Error).message}`);
+      }
+    }
+  })();
+  return controller;
+}
 
 // File upload types
 interface UploadedFile {
@@ -323,7 +378,7 @@ export default function AnalysisPage() {
     setIsGeneratingPoints(true)
     setError(null)
 
-    const result = await generateTestPointsAI({
+    const result = await generateTestPointsAIAction({
       project_id: projectId,
       node_id: nodeId,
       analysis_result: analysisResult,
@@ -346,7 +401,7 @@ export default function AnalysisPage() {
       return
     }
     setIsSaving(true)
-    const result = await saveAnalysis(projectId, nodeId, layers)
+    const result = await saveAnalysisAction(projectId, nodeId, layers)
     setIsSaving(false)
     if (!result.ok) {
       setError(result.error)
@@ -372,7 +427,7 @@ export default function AnalysisPage() {
     const selectedPoints = testPointsResult.test_points.filter((_, i) =>
       checkedTestPoints.has(String(i))
     )
-    const result = await saveTestPoints(projectId, nodeId, selectedPoints)
+    const result = await saveTestPointsAction(projectId, nodeId, selectedPoints)
     setIsSavingTestPoints(false)
     if (!result.ok) {
       setError(result.error)

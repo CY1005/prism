@@ -1973,3 +1973,56 @@ const resp = await fetch(`${ANALYZER_BASE_URL}/api/projects/${projectId}/stats`)
 1. **这是第 4 次修复同类问题（BUG-101→103→107）**：根因是项目中存在 `services/*.ts`（客户端直调 FastAPI）和 `actions/*.ts`（Server Action 中转）两套模式。每次只修复被报告的那个页面，没有系统性排查所有 `services/` 调用。应建立一个 tech debt ticket 统一迁移所有客户端直调。
 2. **认证链必须端到端验证**：光测"API 能否返回数据"不够，还要测"从浏览器发起的请求能否带上正确的认证信息"。
 3. **`NEXT_PUBLIC_` 前缀的环境变量暴露给浏览器**：设计时应明确哪些 URL 是浏览器需要知道的，哪些应该只在服务端使用。内部微服务 URL 不应用 `NEXT_PUBLIC_` 前缀。
+
+## BUG-108: analysis/comparison 页面 7 个 FastAPI 调用绕过服务端直达浏览器
+
+- **日期**: 2026-04-16
+- **严重度**: Major
+- **状态**: 已修复
+- **阶段**: Docker部署
+
+### 现象
+
+analysis 页面（AI 需求分析、测试点生成、保存）和 comparison 页面（对比矩阵生成、回填、导出）的所有 FastAPI 调用都从浏览器直接发往 `NEXT_PUBLIC_ANALYZER_URL`（公网 `api-prism.19911005.xyz`）。
+
+当前这些端点碰巧不需要认证所以能工作，但：
+1. 内部 API URL 暴露在浏览器中（`NEXT_PUBLIC_` 前缀）
+2. 如果未来给这些端点加认证，会立即全部失败（BUG-101→107 的重演）
+3. SSE 流式分析流量绕过 Next.js，无法做服务端日志、限流、错误处理
+
+### 根因
+
+`services/analyzer.ts` 作为客户端 HTTP 客户端，被 `analysis/page.tsx` 和 `comparison/page.tsx` 直接导入并调用。这是 BUG-101/103/107 同一架构问题的最后一批残留，此前每次只修了被报告的那个页面。
+
+受影响的 7 个函数：
+- `analyzeRequirementStream`（SSE 流式）
+- `saveAnalysis`、`generateTestPointsAI`、`saveTestPoints`
+- `generateComparison`、`backfillRow`、`exportComparison`
+
+### 修复
+
+**6 个非流式函数** → Server Action（`actions/analyze.ts`）：
+- `saveAnalysisAction`、`generateTestPointsAIAction`、`saveTestPointsAction`
+- `generateComparisonAction`、`backfillRowAction`、`exportComparisonAction`
+- 通过 `process.env.API_URL`（服务端变量，不暴露给浏览器）调用 FastAPI
+
+**1 个 SSE 流式函数** → Next.js Route Handler（`app/api/analyze/stream/route.ts`）：
+- Server Action 不支持 SSE 回调模式（onChunk/onError/onDone + AbortController）
+- 创建 Route Handler 作为 SSE 代理：浏览器 → Next.js → FastAPI
+- 在 `analysis/page.tsx` 中用本地函数 `analyzeRequirementStream` 调用 `/api/analyze/stream`
+
+**类型保留**：`services/analyzer.ts` 仍作为类型定义文件存在，客户端只导入 `type` + `LEVEL_LABELS`（纯常量），不再有运行时 fetch。
+
+### 受影响文件
+
+- `web/src/actions/analyze.ts`（扩展，+6 个 Server Action）
+- `web/src/app/api/analyze/stream/route.ts`（新建，SSE 代理）
+- `web/src/app/projects/[projectId]/analysis/page.tsx`
+- `web/src/app/projects/[projectId]/comparison/page.tsx`
+
+### 教训
+
+1. **系统性排查 vs 逐个修补**：BUG-101→103→107→108，同一模式修了 4 轮。第一次修复时就应该 `grep -r "NEXT_PUBLIC_ANALYZER_URL" src/services/` 列出所有文件，一次性迁移。
+2. **SSE 流式调用需要 Route Handler**：Server Action 的请求-响应模型无法处理 SSE 的持续流。Next.js Route Handler（`app/api/.../route.ts`）是 SSE 代理的正确位置。
+3. **"当前能工作"不等于"架构正确"**：analyze 端点碰巧不需认证，但这是脆弱的巧合。技术债务应按风险评估优先级，不是等到坏了再修。
+4. **`services/*.ts` 应重新定位为纯类型文件**：所有运行时 fetch 逻辑迁入 `actions/` 或 `app/api/` 后，`services/` 目录只应包含类型定义和常量。

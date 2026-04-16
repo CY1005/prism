@@ -55,15 +55,17 @@ import { usePageContext } from "@/lib/use-page-context"
 import { getCompetitiveRecords } from "@/actions/nodes"
 import { cn } from "@/lib/utils"
 import {
-  generateComparison,
-  backfillRow,
-  exportComparison,
   type ComparisonCell,
   type ComparisonRow,
   type ComparisonColumn,
   type ComparisonConclusion,
   type AnalysisMetadata,
 } from "@/services/analyzer"
+import {
+  generateComparisonAction,
+  backfillRowAction,
+  exportComparisonAction,
+} from "@/actions/analyze"
 
 type CompetitiveRecord = {
   nodeId: string
@@ -193,7 +195,7 @@ export default function ComparisonPage() {
     // Note: In a full implementation, node_ids and competitor_ids would come from
     // real DB entities. For now we pass projectId as the node and empty competitor_ids
     // to let the backend use mock data. The UI still shows feature_name/competitor names.
-    const result = await generateComparison({
+    const result = await generateComparisonAction({
       project_id: projectId,
       node_ids: [projectId], // placeholder — real impl would use actual node UUIDs
       competitor_ids: [], // placeholder — real impl would use actual competitor UUIDs
@@ -277,7 +279,7 @@ export default function ComparisonPage() {
       return
     }
 
-    const result = await backfillRow({
+    const result = await backfillRowAction({
       comparison_id: comparisonId,
       row_index: rowIdx,
       node_id: selfCol.id,
@@ -296,7 +298,7 @@ export default function ComparisonPage() {
   const handleExport = async () => {
     if (!comparisonId) return
     setIsExporting(true)
-    const result = await exportComparison(comparisonId)
+    const result = await exportComparisonAction(comparisonId)
     setIsExporting(false)
 
     if (result.ok) {
