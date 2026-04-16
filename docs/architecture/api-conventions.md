@@ -166,8 +166,13 @@ GET /api/projects/{id}/issues
 不使用分页包装，不用 `ActionResult.data` 直接装数组。
 
 **[V2 新增] §6.5 导出响应模式**
-- 小文件导出（单节点 Markdown）：base64 包在 JSON，走 `ActionResult<{ filename: string; content: string }>`
-- 大文件导出（项目 zip）：`StreamingResponse`，前端 Action 透传 blob，不包 ActionResult
+
+切换依据用**语义**（单/多资源），不用**大小**（阈值难维护，新增场景凭感觉分叉）：
+
+- **单资源导出**（单节点 Markdown、单功能 JSON）：base64 包在 JSON，走 `ActionResult<{ filename: string; content: string }>`
+- **多资源聚合导出**（整项目 zip、多节点归档）：`StreamingResponse`，前端 Action 透传 blob 后再包装
+
+中间态（比如"多个节点单文件"）按"聚合即多资源"归类，走 StreamingResponse。
 
 **[V2 修改] §6.6 乐观锁范围**
 - `version` 字段约束**仅适用于 `dimensionRecords` 表的更新操作**

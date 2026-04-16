@@ -10,7 +10,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from api.db import get_db
+from api.models.tables import User
+from api.routers.auth import require_user
 from api.services.exporter import export_nodes, export_project_as_zip
+from api.services.project_crud import check_permission
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,11 +37,15 @@ class ExportProjectRequest(BaseModel):
 @router.post("/nodes", response_model=ExportNodesResponse)
 def export_nodes_endpoint(
     req: ExportNodesRequest,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """Export selected nodes as a single Markdown file."""
     if not req.node_ids:
         raise HTTPException(status_code=400, detail="node_ids 不能为空")
+
+    if not check_permission(db, str(user.id), str(req.project_id)):
+        raise HTTPException(status_code=403, detail="无权限访问此项目")
 
     try:
         md_content = export_nodes(db, req.project_id, req.node_ids)
@@ -57,9 +64,13 @@ def export_nodes_endpoint(
 @router.post("/project")
 def export_project_endpoint(
     req: ExportProjectRequest,
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     """Export entire project (or product line subtree) as a zip file."""
+    if not check_permission(db, str(user.id), str(req.project_id)):
+        raise HTTPException(status_code=403, detail="无权限访问此项目")
+
     try:
         zip_bytes = export_project_as_zip(db, req.project_id, req.product_line_id)
     except ValueError as e:

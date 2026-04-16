@@ -12,6 +12,7 @@ import {
 import { ErrorCode } from "@/lib/error-codes";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8001";
+const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? "";
 
 // ─── exportNodes ─────────────────────────────────────
 
@@ -31,7 +32,11 @@ export async function exportNodes(
 
     const res = await fetch(`${API_BASE}/api/export/nodes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Token": INTERNAL_TOKEN,
+        "X-User-Id": user.id,
+      },
       body: JSON.stringify({
         project_id: projectId,
         node_ids: nodeIds,
@@ -78,7 +83,11 @@ export async function exportProject(
 
     const res = await fetch(`${API_BASE}/api/export/project`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Token": INTERNAL_TOKEN,
+        "X-User-Id": user.id,
+      },
       body: JSON.stringify({
         project_id: projectId,
         ...(productLineId && { product_line_id: productLineId }),

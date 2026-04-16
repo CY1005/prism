@@ -7,13 +7,11 @@
 
 ## 安全级债务（必须在下一个 milestone 前修复）
 
-### DEBT-001：export.py 两个端点无认证
+### ~~DEBT-001：export.py 两个端点无认证~~ ✅ 已关闭（2026-04-17）
 - **文件**：`api/routers/export.py`
 - **端点**：`POST /api/export/nodes`、`POST /api/export/project`
-- **违规规则**：api-conventions §6.2（所有端点默认 require_user）
-- **风险**：任何人无需登录即可导出任意项目内容
-- **修复方案**：在两个函数签名加 `user: User = Depends(require_user)`，从 `api.routers.auth` import
-- **优先级**：P0，V2 规约发布前必须修
+- **修复内容**：两个端点加 `user: User = Depends(require_user)` + `check_permission(..., "viewer")`；前端 `web/src/actions/export.ts` 配套加 `X-Internal-Token` + `X-User-Id` header
+- **关闭验证**：后端 require_user 依赖强制认证，前端 Server Action 走服务间 HMAC 透传用户身份
 
 ---
 
