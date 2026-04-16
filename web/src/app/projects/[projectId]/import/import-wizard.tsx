@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 import {
   uploadZip,
   confirmImport,
+  createModulesFromZipTree,
   type ParsedFile,
   type FileTreeNode,
   type ImportItem,
@@ -242,6 +243,9 @@ export function ImportWizard({
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Dynamic folders (auto-created from ZIP when project is empty)
+  const [dynamicFolders, setDynamicFolders] = useState<FlatFolder[]>(folders);
+
   // Wizard state
   const [step, setStep] = useState(0);
   const [dragOver, setDragOver] = useState(false);
@@ -310,14 +314,40 @@ export function ImportWizard({
         setParsedFiles(result.data.files);
         setFileTree(result.data.tree);
 
-        // Initialize mapping rows
-        const rows: MappingRow[] = result.data.files.map((f) => ({
-          file: f,
-          selected: true,
-          targetNodeId: folders[0]?.id ?? "",
-          nodeName: f.name.replace(/\.[^.]+$/, ""),
-          dimensionTypeId: dimensions[0]?.id ?? null,
-        }));
+        // If project has no modules, auto-create from ZIP folder structure
+        let availableFolders = dynamicFolders;
+        if (availableFolders.length === 0 && result.data.tree) {
+          const autoResult = await createModulesFromZipTree(projectId, result.data.tree);
+          if (autoResult.success) {
+            availableFolders = autoResult.data.folders;
+            setDynamicFolders(availableFolders);
+          }
+        }
+
+        // Build a map from ZIP path → folder ID for auto-mapping
+        const pathToFolderId = new Map<string, string>();
+        for (const f of availableFolders) {
+          pathToFolderId.set(f.name.toLowerCase(), f.id);
+        }
+
+        // Initialize mapping rows with smart auto-mapping
+        const rows: MappingRow[] = result.data.files.map((f) => {
+          // Try to match file's parent folder in ZIP to a project module
+          const parts = f.path.split("/");
+          let targetId = availableFolders[0]?.id ?? "";
+          // Walk up from parent to root, looking for a matching folder
+          for (let i = parts.length - 2; i >= 0; i--) {
+            const match = pathToFolderId.get(parts[i].toLowerCase());
+            if (match) { targetId = match; break; }
+          }
+          return {
+            file: f,
+            selected: true,
+            targetNodeId: targetId,
+            nodeName: f.name.replace(/\.[^.]+$/, ""),
+            dimensionTypeId: dimensions[0]?.id ?? null,
+          };
+        });
         setMappingRows(rows);
 
         // Select first file for preview
@@ -328,7 +358,7 @@ export function ImportWizard({
         setStep(1);
       });
     },
-    [folders, dimensions],
+    [dynamicFolders, dimensions, projectId],
   );
 
   const handleDrop = useCallback(
@@ -428,7 +458,7 @@ export function ImportWizard({
       // Simulate per-file progress
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        const folder = folders.find((f) => f.id === item.targetNodeId);
+        const folder = dynamicFolders.find((f) => f.id === item.targetNodeId);
         setImportProgress({
           isImporting: true,
           currentFile: item.fileName,
@@ -463,7 +493,7 @@ export function ImportWizard({
       // F15: Build import summary
       const moduleSet = new Set<string>();
       for (const item of items) {
-        const folder = folders.find((f) => f.id === item.targetNodeId);
+        const folder = dynamicFolders.find((f) => f.id === item.targetNodeId);
         moduleSet.add(folder?.name ?? item.nodeName);
       }
       setImportSummary({
@@ -672,7 +702,7 @@ export function ImportWizard({
         )}
 
         {/* ─── Step 2: Mapping ────────────────────── */}
-        {step === 2 && folders.length === 0 && (
+        {step === 2 && dynamicFolders.length === 0 && (
           <div className="flex items-center justify-center p-6" style={{ position: "absolute", inset: 0 }}>
             <Card className="max-w-md p-8 text-center border-dashed border-2">
               <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-yellow-500" />
@@ -686,7 +716,7 @@ export function ImportWizard({
             </Card>
           </div>
         )}
-        {step === 2 && folders.length > 0 && (
+        {step === 2 && dynamicFolders.length > 0 && (
           <div className="flex flex-col" style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
             {/* Bulk Actions Bar */}
             <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/20">
@@ -694,13 +724,13 @@ export function ImportWizard({
                 <Button variant="outline" size="sm" onClick={toggleAll}>
                   {mappingRows.every((r) => r.selected) ? "取消全选" : "全选"}
                 </Button>
-                {folders.length > 0 && (
+                {dynamicFolders.length > 0 && (
                   <Select onValueChange={bulkUpdateTarget}>
                     <SelectTrigger className="w-[180px] h-8 text-sm">
                       <SelectValue placeholder="批量修改目标模块" />
                     </SelectTrigger>
                     <SelectContent>
-                      {folders.map((f) => (
+                      {dynamicFolders.map((f) => (
                         <SelectItem key={f.id} value={f.id}>
                           {f.path}
                         </SelectItem>
@@ -780,7 +810,7 @@ export function ImportWizard({
                         </span>
                       </TableCell>
                       <TableCell>
-                        {folders.length > 0 ? (
+                        {dynamicFolders.length > 0 ? (
                           <Select
                             value={row.targetNodeId}
                             onValueChange={(v) => v && updateTarget(index, v)}
@@ -789,7 +819,7 @@ export function ImportWizard({
                               <SelectValue placeholder="选择模块" />
                             </SelectTrigger>
                             <SelectContent>
-                              {folders.map((f) => (
+                              {dynamicFolders.map((f) => (
                                 <SelectItem key={f.id} value={f.id}>
                                   {f.path}
                                 </SelectItem>
@@ -878,7 +908,7 @@ export function ImportWizard({
                 {mappingRows
                   .filter((r) => r.selected)
                   .map((row) => {
-                    const targetFolder = folders.find(
+                    const targetFolder = dynamicFolders.find(
                       (f) => f.id === row.targetNodeId,
                     );
                     const dim = dimensions.find(

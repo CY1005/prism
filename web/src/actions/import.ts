@@ -10,6 +10,107 @@ import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
 import { logActivity } from "./activity-log";
 
+// ─── Auto-create modules from ZIP structure ──────────
+
+export async function createModulesFromZipTree(
+  projectId: string,
+  tree: FileTreeNode,
+): Promise<ActionResult<{ folders: { id: string; name: string; path: string; depth: number }[] }>> {
+  try {
+    const user = await requireAuth();
+    await checkProjectAccess(user.id, projectId, "editor");
+
+    const createdFolders: { id: string; name: string; path: string; depth: number }[] = [];
+
+    // Collect top-level folders from the ZIP tree
+    const topFolders = tree.children?.filter((c) => c.type === "folder") ?? [];
+
+    for (let i = 0; i < topFolders.length; i++) {
+      const folder = topFolders[i];
+      const [newNode] = await db
+        .insert(nodes)
+        .values({
+          projectId,
+          parentId: null,
+          name: folder.name,
+          type: "folder",
+          depth: 0,
+          sortOrder: i,
+          path: "",
+          createdBy: user.id,
+        })
+        .returning();
+
+      createdFolders.push({
+        id: newNode.id,
+        name: newNode.name,
+        path: newNode.name,
+        depth: 0,
+      });
+
+      // Create sub-folders (depth 1)
+      const subFolders = folder.children?.filter((c) => c.type === "folder") ?? [];
+      for (let j = 0; j < subFolders.length; j++) {
+        const sub = subFolders[j];
+        const [subNode] = await db
+          .insert(nodes)
+          .values({
+            projectId,
+            parentId: newNode.id,
+            name: sub.name,
+            type: "folder",
+            depth: 1,
+            sortOrder: j,
+            path: newNode.id,
+            createdBy: user.id,
+          })
+          .returning();
+
+        createdFolders.push({
+          id: subNode.id,
+          name: subNode.name,
+          path: `${newNode.name} / ${subNode.name}`,
+          depth: 1,
+        });
+      }
+    }
+
+    // If ZIP has no folders (all files at root), create a default module
+    if (createdFolders.length === 0) {
+      const [defaultNode] = await db
+        .insert(nodes)
+        .values({
+          projectId,
+          parentId: null,
+          name: "导入文档",
+          type: "folder",
+          depth: 0,
+          sortOrder: 0,
+          path: "",
+          createdBy: user.id,
+        })
+        .returning();
+
+      createdFolders.push({
+        id: defaultNode.id,
+        name: defaultNode.name,
+        path: defaultNode.name,
+        depth: 0,
+      });
+    }
+
+    logger.action("import.auto_create_modules", user.id, {
+      projectId,
+      folderCount: createdFolders.length,
+    });
+
+    revalidatePath(`/projects/${projectId}`);
+    return actionSuccess({ folders: createdFolders });
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
 // ─── Types ───────────────────────────────────────────
 
 export interface ParsedFile {
