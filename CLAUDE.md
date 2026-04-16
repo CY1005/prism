@@ -101,6 +101,7 @@ docs/                         # 项目文档
 - **禁止跳过 AC**: 没有验收标准不写代码
 - **禁止超长循环**: 同一文件 >6 次编辑 = 停下来重新思考
 - **禁止裸 throw new Error**: `src/lib|actions|services` 下业务错误必须 `throw Errors.XXX` 或 `new AppError(..., ErrorCode.XXX, ...)`，详见 [error-codes 治理](docs/architecture/error-codes.md)
+- **新 Server Action 必须用 defineAction + Zod schema**: `src/actions/*.ts` 下所有对外暴露的写接口（create/update/delete 类），必须 `export const xxx = defineAction(schema, handler)`，schema 必须定义字段长度/格式/枚举约束。详见 [ADR-014](docs/adr/014-input-validation-zod.md)。禁止新增 `export async function xxx(a, b, c)` 这种位置参数、无校验的 Action。
 
 ### 必须的模式
 

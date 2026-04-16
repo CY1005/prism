@@ -8,30 +8,23 @@ import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
+import { defineAction } from "@/lib/define-action";
+import { createCompetitorSchema } from "@/lib/validators/competitor";
 
-export async function createCompetitor(
-  projectId: string,
-  data: {
-    name: string;
-    website?: string;
-    description?: string;
-  },
-): Promise<ActionResult<{ id: string }>> {
-  try {
+export const createCompetitor = defineAction(
+  createCompetitorSchema,
+  async ({ projectId, name, website, description }): Promise<ActionResult<{ id: string }>> => {
     const user = await requireAuth();
     await checkProjectAccess(user.id, projectId, "editor");
-
-    if (!data.name?.trim()) {
-      return actionError(new AppError("竞品名称不能为空", "blocking", "VALIDATION_ERROR"));
-    }
 
     const [competitor] = await db
       .insert(competitors)
       .values({
         projectId,
-        name: data.name.trim(),
-        website: data.website?.trim() || null,
-        description: data.description?.trim() || null,
+        name,
+        website: website || null,
+        description: description || null,
       })
       .returning();
 
@@ -39,10 +32,8 @@ export async function createCompetitor(
     revalidatePath(`/projects/${projectId}`);
 
     return actionSuccess({ id: competitor.id });
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
 export async function updateCompetitor(
   competitorId: string,

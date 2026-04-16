@@ -110,7 +110,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ teamId: s
   // Invite state
   const [inviteDialog, setInviteDialog] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteRole, setInviteRole] = useState("member")
+  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member")
   const [inviting, setInviting] = useState(false)
 
   // Delete state
@@ -167,7 +167,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ teamId: s
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return
     setInviting(true)
-    const result = await inviteMember(teamId, {
+    const result = await inviteMember({
+      teamId,
       email: inviteEmail.trim(),
       role: inviteRole,
     })
@@ -471,7 +472,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ teamId: s
             </div>
             <div className="space-y-2">
               <Label>角色</Label>
-              <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
+              <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v as "admin" | "member")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

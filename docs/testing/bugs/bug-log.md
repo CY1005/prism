@@ -2173,3 +2173,108 @@ grep -rn "throw new Error(" src/lib src/actions src/services --include="*.ts"  #
 ```
 
 **教训升级**：契约漂移不只靠 review 和规则拦截——**把 code 类型从 string 收紧为 enum，让类型系统当自动审查员**，一次性抓出 13 个历史遗留 rogue code。这是 Story 4 的种子。
+
+---
+
+## BUG-111: 98% Server Action 无入参校验（Zod schema 缺失）
+
+**发现日期**: 2026-04-17
+**模式**: 契约漂移(#1) + 等价类/边界值未覆盖（测试盲区）
+**严重程度**: 高（安全 + 稳定性双面）
+
+### 现象
+
+静态扫描 `web/src/actions/*.ts`，共 **109 个对外暴露的 Server Action**（用户点击前端按钮能触发的写接口），其中：
+- 走 Zod schema 校验的：**2 个**（`auth.register` / `projects.create`）
+- **裸奔的**：**107 个（98%）**
+- 数据库侧 `varchar(n)` 字段：**0 个**
+- 数据库侧 `text()` 无限长字段：**66 个**
+
+**两道防线都不挡**。
+
+### 等价类矩阵（以 `createNode(name)` 为样本）
+
+| 等价类 | 输入 | 期望 | 实际 |
+|-------|------|------|------|
+| 合法 | `"推理服务"` | ✅ 创建 | ✅ |
+| 空字符串 | `""` | ❌ 拒绝 | ⚠️ DB 存空 |
+| 只有空格 | `"   "` | ❌ 拒绝 | ⚠️ 通过 |
+| 超长（100MB）| `"A".repeat(1e8)` | ❌ 拒绝 | 💥 塞进 DB |
+| HTML/JS 注入 | `"<script>...`  | 过滤/拒绝 | 💥 原样存 |
+| 非法 enum | `type: "invalid"` | ❌ 拒绝 | ⚠️ 无校验 |
+
+**109 × 6 ≈ 600 个漏掉的测试点**。
+
+### 根因（三层）
+
+**层 1 表面**：Server Action 函数签名直接用位置参数，无统一校验入口。
+
+**层 2 架构**：
+- 没有"所有 Action 入参必须过 schema" 的强制约束
+- 依赖 Agent 自觉写 `if (!data.name?.trim())` 这类手动校验——观察实际代码，**绝大多数只判了非空，没判长度、类型、格式**
+- 数据库层 `text()` 字段本该是"无限制"的使用信号（如 markdown 内容），但被滥用到所有字符串字段
+
+**层 3 测试/方法论根因**：
+- E2E 测试 155 点只覆盖 **golden path**，完全没覆盖边界值/非法值/超长值的**异常等价类**
+- 155 点 100% 通过营造了"质量已到位"的假象，实际是**覆盖率口径**的问题
+- AI 并行开发时，**入参校验属于"隐式约束"**——AC 写业务行为，不写"字段最多 100 字"这种约束，Agent 默认不做
+
+### 修复（方案 B：质量门 + 高风险先补）
+
+**1. 建脚手架 `lib/define-action.ts`**：`defineAction(schema, handler)` helper，强制所有新 Action 接入 schema。
+
+**2. 按风险度排 P0 清单（10 个）**：
+- `createNode` / `updateNode` / `renameNode`
+- `createTeam` / `inviteMember`
+- `createIssue` / `updateIssue`
+- `createCompetitor` / `createCompetitorReference`
+- `createDimensionRecord`
+
+**3. 剩余 97 个**：短期保留裸奔，新功能/修改时必须迁，不阻塞其他工作。
+
+**4. 文档 + 规则**：ADR-014 记录选型理由 + CLAUDE.md 加禁止规则。
+
+### 为什么选 Zod
+
+详见 [ADR-014](../../adr/014-input-validation-zod.md)。核心理由：
+1. `z.infer` 让类型和校验规则**单一真相源**（和 BUG-110 方法论同构）
+2. Next.js / shadcn / Auth.js 生态事实标准
+3. Prism 已有 2 个在用，扩展而非引入新库
+4. 体积小（13KB）、性能好、错误消息可定制中文
+
+### 教训
+
+1. **"100% 通过" ≠ "质量到位"**：测试覆盖率要看**口径**——155 点 golden path 100% 掩盖了异常等价类 0% 覆盖率的事实。未来写测试点要明确"正常/边界/异常/安全"四档分布。
+2. **入参校验必须工程化强制，不能靠自觉**：观察实际代码，Agent 写的手动校验几乎全部只判非空不判长度——即使写规则说"必须判长度"也只是文字约束。`defineAction` helper 是**让写裸奔代码的路径更难走**。
+3. **两道防线都要挡**：应用层 Zod + DB 层 varchar(n) 双重保险。但 Prism 短期先补应用层（错误消息友好），DB 层后续再补作为兜底。
+4. **方法论复用**：这和 BUG-110 的错误码治理是**同一套"工程防线"方法论的第 2 次应用**——发现漂移 → 建类型约束 → tsc 强制执法。可复用次数越多，越证明方法论本身有价值，而不是偶然。
+
+### 修复实施（同日）
+
+**交付物：**
+| 产出 | 路径 |
+|------|------|
+| 脚手架 | `web/src/lib/define-action.ts` |
+| Schema 集中定义 | `web/src/lib/validators/{node,team,issue,competitor}.ts` |
+| 10 个 P0 Action 迁移 | `actions/{nodes,teams,issues,competitors,competitor-references}.ts` |
+| 架构决策记录 | `docs/adr/014-input-validation-zod.md` |
+| CLAUDE.md 新规则 | 禁止裸位置参数 Action |
+| STAR 故事 | `05-面试/STAR故事/STAR故事库.md` Story 4 |
+
+**覆盖率变化：**
+- 修复前：2 / 109 = **1.8%**
+- 修复后：12 / 109 = **11.0%**（2 老 + 10 新 P0）
+- 剩余 97 个：短期裸奔，新功能/修改时必须迁，CLAUDE.md 已加硬规则
+
+**P0 清单（已全部接入）：**
+`createNode` / `renameNode` / `deleteNode` / `createDimensionRecord` / `createTeam` / `inviteMember` / `createIssue` / `updateIssue` / `createCompetitor` / `createReference`
+
+**验证：**
+```bash
+cd web && npx tsc --noEmit                                      # 零错
+grep -rn "defineAction(" src/actions --include="*.ts" | wc -l   # 10
+```
+
+**实战中类型系统的价值（BUG-110 同理复现）：**
+迁移过程中，收紧调用方类型立刻抓出 3 处位置参数调用遗漏（workspace.tsx 的 renameNode/deleteNode/createDimensionRecord），以及 1 处 Select 组件的 role 类型不匹配。**不收类型光靠 review 大概率会漏，tsc 一收就全冒出来**——这是"工程防线"方法论的第 3 次正反馈。
+

@@ -499,7 +499,12 @@ export function ProjectWorkspace({
     if (!addNodeName.trim()) return;
     startTransition(async () => {
       try {
-        const result = await createNode(project.id, addNodeParentId, addNodeName.trim(), addNodeType);
+        const result = await createNode({
+          projectId: project.id,
+          parentId: addNodeParentId,
+          name: addNodeName.trim(),
+          type: addNodeType,
+        });
         if (!result.success) {
           alert(`创建失败: ${result.error}`);
           return;
@@ -514,7 +519,7 @@ export function ProjectWorkspace({
 
   const handleRename = (nodeId: string, newName: string) => {
     startTransition(async () => {
-      await renameNode(nodeId, newName);
+      await renameNode({ nodeId, name: newName });
       refreshPage();
     });
   };
@@ -546,7 +551,7 @@ export function ProjectWorkspace({
         parentId = findParent(tree, deleteNodeId);
       }
 
-      await deleteNode(deleteNodeId);
+      await deleteNode({ nodeId: deleteNodeId });
 
       if (selectedId === deleteNodeId) {
         if (parentId) {
@@ -581,7 +586,11 @@ export function ProjectWorkspace({
       }
       // Check if project had zero dimension records before this save
       const hadNoRecords = nodeData.records.length === 0;
-      await createDimensionRecord(nodeData.node.id, addDimTypeId, content);
+      await createDimensionRecord({
+        nodeId: nodeData.node.id,
+        dimensionTypeId: addDimTypeId,
+        content,
+      });
       setAddDimDialog(false);
       const data = await getNodeWithDimensions(nodeData.node.id);
       setNodeData(data);
@@ -659,7 +668,13 @@ export function ProjectWorkspace({
   const handleAddIssue = (data: { category: string; description: string; tags: string[] }) => {
     if (!nodeData) return;
     startTransition(async () => {
-      const result = await createIssue(project.id, nodeData.node.id, data);
+      const result = await createIssue({
+        projectId: project.id,
+        nodeId: nodeData.node.id,
+        category: data.category as "bug" | "tech_debt" | "design_flaw" | "performance",
+        description: data.description,
+        tags: data.tags,
+      });
       if (result.success) {
         const issues = await getIssuesByNode(project.id, nodeData.node.id);
         setNodeIssues(issues as Issue[]);
@@ -681,7 +696,7 @@ export function ProjectWorkspace({
   // ─── F6: Competitor Reference Handlers ──────────────────
 
   const handleCreateCompetitorInline = async (data: { name: string; website?: string; description?: string }): Promise<string | null> => {
-    const result = await createCompetitor(project.id, data);
+    const result = await createCompetitor({ projectId: project.id, ...data });
     if (result.success) {
       const comps = await getCompetitorsByProject(project.id);
       setProjectCompetitors(comps as Competitor[]);
@@ -702,7 +717,11 @@ export function ProjectWorkspace({
       if (editingRef) {
         await updateReference(editingRef.reference.id, project.id, data);
       } else {
-        await createReference(project.id, nodeData.node.id, data);
+        await createReference({
+          projectId: project.id,
+          nodeId: nodeData.node.id,
+          ...data,
+        });
       }
       const refs = await getReferencesByNode(project.id, nodeData.node.id);
       setNodeRefs(refs as CompetitorReference[]);

@@ -91,7 +91,13 @@ export default function IssuesPage() {
 
   const handleSave = (data: { category: string; description: string; tags: string[] }) => {
     startTransition(async () => {
-      await createIssue(projectId, null, data)
+      await createIssue({
+        projectId,
+        nodeId: null,
+        category: data.category as "bug" | "tech_debt" | "design_flaw" | "performance",
+        description: data.description,
+        tags: data.tags,
+      })
       await loadIssues()
     })
   }

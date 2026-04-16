@@ -15,6 +15,14 @@ import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
+import { defineAction } from "@/lib/define-action";
+import {
+  createNodeSchema,
+  renameNodeSchema,
+  deleteNodeSchema,
+  createDimensionRecordSchema,
+} from "@/lib/validators/node";
 import { logActivity } from "./activity-log";
 
 export async function getProjectTree(projectId: string) {
@@ -149,13 +157,9 @@ export async function getProjectDimensions(projectId: string) {
     .orderBy(asc(projectDimensionConfigs.sortOrder));
 }
 
-export async function createNode(
-  projectId: string,
-  parentId: string | null,
-  name: string,
-  type: "folder" | "file" = "file",
-): Promise<ActionResult<{ id: string }>> {
-  try {
+export const createNode = defineAction(
+  createNodeSchema,
+  async ({ projectId, parentId, name, type }): Promise<ActionResult<{ id: string }>> => {
     const user = await requireAuth();
     await checkProjectAccess(user.id, projectId, "editor");
 
@@ -212,22 +216,17 @@ export async function createNode(
     revalidatePath(`/projects/${projectId}`);
 
     return actionSuccess({ id: newNode.id });
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
-export async function createDimensionRecord(
-  nodeId: string,
-  dimensionTypeId: number,
-  content: Record<string, unknown>,
-): Promise<ActionResult<{ id: string }>> {
-  try {
+export const createDimensionRecord = defineAction(
+  createDimensionRecordSchema,
+  async ({ nodeId, dimensionTypeId, content }): Promise<ActionResult<{ id: string }>> => {
     const user = await requireAuth();
 
     const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
     if (!node)
-      return actionError(new AppError("节点不存在", "blocking", "NOT_FOUND", 404));
+      return actionError(new AppError("节点不存在", "blocking", ErrorCode.NOT_FOUND, 404));
 
     await checkProjectAccess(user.id, node.projectId, "editor");
 
@@ -249,10 +248,8 @@ export async function createDimensionRecord(
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess({ id: record.id });
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
 export async function updateDimensionRecord(
   recordId: string,
@@ -351,17 +348,15 @@ export async function deleteDimensionRecord(
   }
 }
 
-export async function renameNode(
-  nodeId: string,
-  newName: string,
-): Promise<ActionResult> {
-  try {
+export const renameNode = defineAction(
+  renameNodeSchema,
+  async ({ nodeId, name: newName }): Promise<ActionResult> => {
     const user = await requireAuth();
 
     const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
     if (!node)
       return actionError(
-        new AppError("节点不存在", "blocking", "NOT_FOUND", 404),
+        new AppError("节点不存在", "blocking", ErrorCode.NOT_FOUND, 404),
       );
 
     await checkProjectAccess(user.id, node.projectId, "editor");
@@ -376,19 +371,18 @@ export async function renameNode(
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess(undefined);
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
-export async function deleteNode(nodeId: string): Promise<ActionResult> {
-  try {
+export const deleteNode = defineAction(
+  deleteNodeSchema,
+  async ({ nodeId }): Promise<ActionResult> => {
     const user = await requireAuth();
 
     const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
     if (!node)
       return actionError(
-        new AppError("节点不存在", "blocking", "NOT_FOUND", 404),
+        new AppError("节点不存在", "blocking", ErrorCode.NOT_FOUND, 404),
       );
 
     await checkProjectAccess(user.id, node.projectId, "editor");
@@ -418,10 +412,8 @@ export async function deleteNode(nodeId: string): Promise<ActionResult> {
     revalidatePath(`/projects/${node.projectId}`);
 
     return actionSuccess(undefined);
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
 export async function getFolderOverview(
   nodeId: string,

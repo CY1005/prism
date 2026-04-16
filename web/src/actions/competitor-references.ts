@@ -8,43 +8,37 @@ import { requireAuth } from "@/lib/auth";
 import { checkProjectAccess } from "@/services/permission.service";
 import { logger } from "@/lib/logger";
 import { type ActionResult, actionError, actionSuccess, AppError } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
+import { defineAction } from "@/lib/define-action";
+import { createCompetitorReferenceSchema } from "@/lib/validators/competitor";
 
-export async function createReference(
-  projectId: string,
-  nodeId: string,
-  data: {
-    competitorId: string;
-    version?: string;
-    featureCoverage?: string;
-    technicalApproach?: string;
-    prosAndCons?: { pros: string[]; cons: string[] };
-  },
-): Promise<ActionResult<{ id: string }>> {
-  try {
+export const createReference = defineAction(
+  createCompetitorReferenceSchema,
+  async ({ projectId, nodeId, competitorId, version, featureCoverage, technicalApproach, prosAndCons }): Promise<ActionResult<{ id: string }>> => {
     const user = await requireAuth();
     await checkProjectAccess(user.id, projectId, "editor");
 
     // Verify node belongs to project
     const [node] = await db.select().from(nodes).where(eq(nodes.id, nodeId));
     if (!node || node.projectId !== projectId) {
-      return actionError(new AppError("节点不存在或不属于该项目", "blocking", "NOT_FOUND", 404));
+      return actionError(new AppError("节点不存在或不属于该项目", "blocking", ErrorCode.NOT_FOUND, 404));
     }
 
     // Verify competitor belongs to same project
-    const [competitor] = await db.select().from(competitors).where(eq(competitors.id, data.competitorId));
+    const [competitor] = await db.select().from(competitors).where(eq(competitors.id, competitorId));
     if (!competitor || competitor.projectId !== projectId) {
-      return actionError(new AppError("竞品不存在或不属于该项目", "blocking", "NOT_FOUND", 404));
+      return actionError(new AppError("竞品不存在或不属于该项目", "blocking", ErrorCode.NOT_FOUND, 404));
     }
 
     const [ref] = await db
       .insert(competitorReferences)
       .values({
         nodeId,
-        competitorId: data.competitorId,
-        version: data.version?.trim() || null,
-        featureCoverage: data.featureCoverage?.trim() || null,
-        technicalApproach: data.technicalApproach?.trim() || null,
-        prosAndCons: data.prosAndCons || null,
+        competitorId,
+        version: version || null,
+        featureCoverage: featureCoverage || null,
+        technicalApproach: technicalApproach || null,
+        prosAndCons: prosAndCons || null,
       })
       .returning();
 
@@ -52,10 +46,8 @@ export async function createReference(
     revalidatePath(`/projects/${projectId}`);
 
     return actionSuccess({ id: ref.id });
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
 export async function updateReference(
   referenceId: string,

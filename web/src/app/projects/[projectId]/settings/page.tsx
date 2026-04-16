@@ -230,7 +230,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ proj
   }
 
   const handleCreateCompetitor = async (data: { name: string; website?: string; description?: string }) => {
-    const result = await createCompetitor(projectId, data)
+    const result = await createCompetitor({ projectId, ...data })
     if (result.success) await loadCompetitors()
   }
 

@@ -13,6 +13,9 @@ import {
   actionSuccess,
   AppError,
 } from "@/lib/errors";
+import { ErrorCode } from "@/lib/error-codes";
+import { defineAction } from "@/lib/define-action";
+import { createTeamSchema, inviteMemberSchema } from "@/lib/validators/team";
 
 // ─── getTeams ────────────────────────────────────────
 
@@ -67,24 +70,16 @@ export async function getTeamById(teamId: string) {
 
 // ─── createTeam ──────────────────────────────────────
 
-export async function createTeam(data: {
-  name: string;
-  description?: string;
-}): Promise<ActionResult<{ id: string }>> {
-  try {
+export const createTeam = defineAction(
+  createTeamSchema,
+  async ({ name, description }): Promise<ActionResult<{ id: string }>> => {
     const user = await requireAuth();
-
-    if (!data.name?.trim()) {
-      return actionError(
-        new AppError("团队名称不能为空", "blocking", "VALIDATION_ERROR"),
-      );
-    }
 
     const [team] = await db
       .insert(teams)
       .values({
-        name: data.name.trim(),
-        description: data.description?.trim() || null,
+        name,
+        description: description || null,
         ownerId: user.id,
       })
       .returning();
@@ -100,10 +95,8 @@ export async function createTeam(data: {
     revalidatePath("/teams");
 
     return actionSuccess({ id: team.id });
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
 // ─── updateTeam ──────────────────────────────────────
 
@@ -216,17 +209,15 @@ export async function getTeamMembers(teamId: string) {
 
 // ─── inviteMember ────────────────────────────────────
 
-export async function inviteMember(
-  teamId: string,
-  data: { email: string; role?: string },
-): Promise<ActionResult<{ memberId: string }>> {
-  try {
+export const inviteMember = defineAction(
+  inviteMemberSchema,
+  async ({ teamId, email, role: requestedRole }): Promise<ActionResult<{ memberId: string }>> => {
     const user = await requireAuth();
 
     const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
     if (!team) {
       return actionError(
-        new AppError("团队不存在", "blocking", "NOT_FOUND", 404),
+        new AppError("团队不存在", "blocking", ErrorCode.NOT_FOUND, 404),
       );
     }
 
@@ -244,7 +235,7 @@ export async function inviteMember(
         );
       if (!member) {
         return actionError(
-          new AppError("无权限邀请成员", "blocking", "FORBIDDEN", 403),
+          new AppError("无权限邀请成员", "blocking", ErrorCode.FORBIDDEN, 403),
         );
       }
     }
@@ -253,10 +244,10 @@ export async function inviteMember(
     const [targetUser] = await db
       .select()
       .from(users)
-      .where(eq(users.email, data.email.trim()));
+      .where(eq(users.email, email));
     if (!targetUser) {
       return actionError(
-        new AppError("该邮箱用户不存在", "blocking", "NOT_FOUND", 404),
+        new AppError("该邮箱用户不存在", "blocking", ErrorCode.NOT_FOUND, 404),
       );
     }
 
@@ -272,11 +263,11 @@ export async function inviteMember(
       );
     if (existing) {
       return actionError(
-        new AppError("该用户已是团队成员", "blocking", "DUPLICATE_ENTRY", 409),
+        new AppError("该用户已是团队成员", "blocking", ErrorCode.DUPLICATE_ENTRY, 409),
       );
     }
 
-    const role = data.role === "admin" ? "admin" : "member";
+    const role = requestedRole;
 
     const [member] = await db
       .insert(teamMembers)
@@ -294,10 +285,8 @@ export async function inviteMember(
     revalidatePath("/teams");
 
     return actionSuccess({ memberId: member.id });
-  } catch (error) {
-    return actionError(error);
-  }
-}
+  },
+);
 
 // ─── removeMember ────────────────────────────────────
 
