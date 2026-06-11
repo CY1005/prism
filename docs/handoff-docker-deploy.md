@@ -100,6 +100,42 @@ curl --noproxy '*' -s https://api-prism.19911005.xyz/health/
 2. **`web/src/lib/projects-data.ts` 等 mock 数据文件**：仍然存在，虽然不再被 projects 页面使用，但可能被其他页面引用。
 3. **每次代码修改需要重建 Docker 镜像**（~60s），开发效率低。可考虑开发时用 `npm run dev` + Docker 只跑 DB/API。
 
+## 未来优化（2026-05-11 新增）
+
+**来源**：腾讯技术工程《Harness 不是目的，知识才是护城河》（`/root/tmp/Harness不是目的，知识才是护城河 —— 一个AI工程交付团队的知识沉淀实践.pdf`）。读完后判定 Prism 当前数据模型缺三块能力，按 ROI 排序：
+
+### F-OPT-001：知识成熟度 + 自动衰减（P0）
+
+- **问题**：Prism 当前是单调累积，没有自净化机制。dimension_records 只进不出，3-6 个月后必然变沼泽。
+- **方案**：
+  - `dimension_records` 加 `maturity` 枚举字段（`draft`/`verified`/`proven`）+ `last_referenced_at` 时间戳
+  - 新增 cron 跑衰减判定：`proven` 条目 12 月未引用 → 降 `verified`；`verified` 6 月未引用 → 降 `draft`；`draft` 持续未引用 → 归档
+  - 引用计数靠 AI 分析端点（F13/F18）调用时自动 `UPDATE last_referenced_at`
+- **影响文件**：`web/src/db/schema.ts`（加字段）、`api/services/*.py`（埋点）、新增 `api/services/maturity_decay.py`
+- **配套 ADR**：建议写 ADR-015《知识生命周期管理》
+
+### F-OPT-002：知识类型 MECE 推荐（P1）
+
+- **问题**：用户当前可自由建维度，但没有分类引导，长期会出现"近似维度满天飞"。
+- **方案**：在新建维度时由 F13 AI 分析推荐归入 5 种标准类型之一：`model`（实体定义）/ `decision`（架构决策）/ `guideline`（推荐做法）/ `pitfall`（已知坑）/ `process`（流程步骤）。用户可覆盖，但默认贴标签。
+- **影响文件**：`web/src/actions/dimensions.ts`（建维度时调 AI）、`api/services/ai_provider.py`（加 classify_dimension prompt）
+
+### F-OPT-003：Agent 友好的三级渐进索引 API（P2，但是跳槽叙事关键）
+
+- **问题**：F18 RRF 混合搜索是给"人"用的；Agent 在 cost-aware 场景下需要分层探查（catalog → list → entry），而不是一次性灌入向量召回结果。
+- **方案**：新增三个端点（不替换 F18，并存）：
+  - `GET /api/agent/catalog`（~50 行：项目下有哪些维度/分类）
+  - `GET /api/agent/list?dim=X`（~300 行：某分类下条目摘要 + tags）
+  - `GET /api/agent/entry/{id}`（完整内容 + source_references）
+- **影响文件**：`api/routers/agent_query.py`（新增）、`api/services/progressive_index.py`（新增）
+- **战略意义**：这条直接对接 2026Q4 跳槽路线 A+C（PRISM 代表作 + AI 质量工程方向）。其他 RAG 产品都在做"语义召回"，Prism 走"结构化分层"是差异化卖点。
+
+### 不要照抄的部分
+
+- **不要回退到纯 Markdown / 文件系统即状态机**：腾讯团队场景是企业内网 + IDE 重度，Prism 用 DB 是对的；但**应当输出 Markdown 镜像作为导出能力**，避免成为知识监狱。
+- **不要做冷启动 /flow-import 三 Agent 管道**：单人场景下复杂度大于价值。
+- **不要做跨设备远程操控**：Prism 是 Web，天然解决。
+
 ## 测试指南
 
 ### 端到端测试流程
